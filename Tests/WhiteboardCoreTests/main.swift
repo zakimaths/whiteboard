@@ -693,8 +693,12 @@ check("General demos preserve edits, resume partial installation and restore cop
         let first = try library.list()[0], renamed = try library.move(first.url,to:.unfinished,name:"My renamed example")
         var board = try library.load(renamed); board.texts.append(BoardText(text:"My addition",origin:Point(20,20))); try library.save(board,at:renamed)
         _ = try DemoContent.populate(library); try expect(try library.list().count == 3); try expect(try library.load(renamed) == board)
-        _ = try DemoContent.populate(library,restore:true); try expect(try library.list().count == 6)
+        let damaged = try library.create(name:"Unreadable unrelated idea")
+        let damagedBytes = Data("unreadable".utf8)
+        try damagedBytes.write(to:damaged.appendingPathComponent("board.json"))
+        _ = try DemoContent.populate(library,restore:true); try expect(try library.list().count == 7)
         try expect(try library.load(renamed) == board)
+        try expect(try Data(contentsOf:damaged.appendingPathComponent("board.json")) == damagedBytes)
     }
 }
 check("Identical saves do not write current, previous or history metadata") {

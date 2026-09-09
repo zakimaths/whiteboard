@@ -13,7 +13,7 @@ Whiteboard remains a general-purpose desktop canvas. The installed app ships thr
 | Capture/export exit | Quit waits for exports and tracked imports, cancels an active capture helper and waits for its cleanup. Capture sizes are checked before full data loading; permission denial is explained. |
 | Tray corruption | Damaged entries are reported individually. Healthy references can still be read or removed. Unknown storage blocks new additions until set aside. |
 | Tray removal | Disk-backed Undo last removal survives restarts. Up to eight active and eight removed entries share 64 MiB; restore respects the active limit. Explicit emptying frees removed entries. |
-| Demo installation | General examples use per-demo markers, preserve renamed/edited boards, retry incomplete installations and have an explicit restore-as-copies action. |
+| Demo installation | General examples use per-demo markers, preserve renamed/edited boards, retry incomplete installations and have an explicit restore-as-copies action. Unreadable unrelated boards cannot block restoration and remain untouched. |
 | Canvas rendering | A spatial index yields visible object positions in drawing order. Small pen redraws avoid scanning every stored stroke; moves rebuild indexes on completion. |
 | Preview quality | A changed preview budget invalidates undersized cached images so they are decoded at the new resolution. |
 | Undo | Histories have count and estimated-byte budgets: 40 entries and a 32 MiB target per stack, retaining at least one usable checkpoint even if it alone exceeds the target. No-op clicks/erases/resizes do not consume a checkpoint. |

@@ -12,9 +12,9 @@ public enum DemoContent {
             let marker = library.root.appendingPathComponent(".demo-\(key)-v1")
             if !restore, FileManager.default.fileExists(atPath:marker.path) { return }
             let exact = existing.first(where: { $0.title == title })
-            let recognised = try existing.contains { item in
+            let recognised = !restore && existing.contains { item in
                 if item.title == title { return true }
-                return try library.load(item.url).texts.contains(where: { $0.text == signature })
+                return (try? library.load(item.url).texts.contains(where: { $0.text == signature })) ?? false
             }
             if !restore, recognised {
                 // If creation succeeded but the initial status move failed, retry that
