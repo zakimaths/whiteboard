@@ -11,9 +11,15 @@ final class OverlayWindow: NSWindow {
 final class PanelView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame); wantsLayer = true
-        layer?.backgroundColor = NSColor.boardPaper.withAlphaComponent(0.98).cgColor
         layer?.cornerRadius = 15; layer?.borderWidth = 1
-        layer?.borderColor = NSColor.boardInk.withAlphaComponent(0.12).cgColor
+        updateMaterial()
+    }
+    override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); updateMaterial() }
+    private func updateMaterial() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+            layer?.borderColor = NSColor.separatorColor.cgColor
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
@@ -43,6 +49,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var trayPanel: PanelView?
     var trayOpen = false
     var trayReferences: [CaptureReference] = []
+    var trayDiagnostics: [CaptureTrayDiagnostic] = []
     var trayButton: NSButton?
     var desktopHint: NSMenuItem?
     var watches: [DirectoryWatch] = []
@@ -56,6 +63,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var isSaving = false
     var pendingImports = 0
     var exporting = false
+    var captureProcess: Process?
+    var saveFailure: Error?
+    var saveRetryCount = 0
+    var backgroundWorkPending: Bool { pendingImports > 0 || exporting || captureProcess != nil }
     var saveBlocked = false
     var terminationPending = false
     var afterSave: (() -> Void)?
@@ -70,7 +81,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var onScreen: CGDirectDisplayID?
     var isBusy = false { didSet { canvas.acceptsInput = !isBusy } }
     var memoryPressure: DispatchSourceMemoryPressure?
-    var demoRoot: URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Whiteboard/Demo Ideas",isDirectory:true) }
+    var demoRoot: URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Whiteboard/Everyday Demos",isDirectory:true) }
     var isDemo: Bool { library?.root.standardizedFileURL == demoRoot.standardizedFileURL }
     var root: URL {
         let args = ProcessInfo.processInfo.arguments
@@ -89,7 +100,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         automaticShapesControl?.state = canvas.automaticShapes ? .on : .off
         if hotKey?.registered != true { statusItem.button?.toolTip = "Whiteboard · shortcut unavailable; use this menu to open" }
         NotificationCenter.default.addObserver(self, selector: #selector(displaysChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         memoryPressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning,.critical], queue: .main)
         memoryPressure?.setEventHandler { [weak self] in self?.canvas.images.clear() }; memoryPressure?.resume()
@@ -109,6 +119,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             fileMenu.addItem(withTitle:title,action:action,keyEquivalent:key).target = self
         }
         fileMenu.addItem(withTitle:"Return to my ideas",action:#selector(returnToIdeas),keyEquivalent:"").target = self
+        fileMenu.addItem(withTitle:"Retry saving",action:#selector(retrySave),keyEquivalent:"s").target = self
+        fileMenu.addItem(withTitle:"Clean unused image assets…",action:#selector(compactAssets),keyEquivalent:"").target = self
+        fileMenu.addItem(withTitle:"Export HTML with transcript…",action:#selector(exportHTML),keyEquivalent:"").target = self
+        fileMenu.addItem(withTitle:"Restore general demo examples as copies…",action:#selector(restoreDemoCopies),keyEquivalent:"").target = self
         fileItem.submenu = fileMenu; main.addItem(fileItem)
         let edit = NSMenu(title: "Edit")
         for (title,action,key) in [("Cut",#selector(NSText.cut(_:)),"x"),("Copy",#selector(NSText.copy(_:)),"c"),("Paste",#selector(NSText.paste(_:)),"v"),("Select All",#selector(NSText.selectAll(_:)),"a")] {
@@ -122,6 +136,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         edit.addItem(withTitle:"Fit all content",action:#selector(fitContent),keyEquivalent:"1").target = self
         edit.addItem(withTitle:"Crop selected image…",action:#selector(cropImage),keyEquivalent:"").target = self
         edit.addItem(withTitle:"Restore full image",action:#selector(restoreImage),keyEquivalent:"").target = self
+        edit.addItem(withTitle:"Lock / unlock selected image",action:#selector(lockImage),keyEquivalent:"").target = self
+        edit.addItem(withTitle:"Image description…",action:#selector(describeImage),keyEquivalent:"").target = self
+        edit.addItem(withTitle:"Next board object",action:#selector(nextObject),keyEquivalent:"]").target = self
+        edit.addItem(withTitle:"Previous board object",action:#selector(previousObject),keyEquivalent:"[").target = self
+        edit.addItem(withTitle:"Edit selected object",action:#selector(editObject),keyEquivalent:"").target = self
         let shapes = NSMenuItem(title:"Drawing shapes",action:nil,keyEquivalent:"")
         shapes.submenu = shapeMenu(); edit.addItem(shapes)
         editItem.submenu = edit; main.addItem(editItem); NSApp.mainMenu = main
@@ -130,7 +149,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let screen = NSScreen.main ?? NSScreen.screens[0]
         window = OverlayWindow(contentRect: screen.visibleFrame, styleMask: [.borderless], backing: .buffered, defer: false)
         window.title = "Whiteboard"; window.isOpaque = false; window.backgroundColor = .clear
-        window.appearance = NSAppearance(named: .aqua)
         window.level = .floating; window.hasShadow = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
@@ -142,6 +160,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     private func button(_ title: String, _ action: Selector, symbol: String? = nil) -> NSButton {
         let button = NSButton(title: title, target: self, action: action)
         button.bezelStyle = .texturedRounded; button.font = .systemFont(ofSize: 12, weight: .medium)
+        button.contentTintColor = .labelColor
         if let symbol { button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title); button.imagePosition = .imageLeading }
         button.setAccessibilityLabel(title)
         return button
@@ -153,7 +172,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         shelfStack = NSStackView(); shelfStack.orientation = .vertical; shelfStack.alignment = .leading; shelfStack.spacing = 10
         shelfStack.translatesAutoresizingMaskIntoConstraints = false; shelf.addSubview(shelfStack)
         let header = NSStackView(); header.orientation = .horizontal; header.spacing = 10
-        let mark = NSTextField(labelWithString: "✳"); mark.font = .systemFont(ofSize: 23, weight: .medium); mark.textColor = .boardInk
+        let mark = NSTextField(labelWithString: "✳"); mark.font = .systemFont(ofSize: 23, weight: .medium); mark.textColor = .labelColor
         header.addArrangedSubview(mark)
         titleLabel.font = .systemFont(ofSize: 14, weight: .semibold); titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
@@ -256,6 +275,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         if trayOpen { performTray {_ in} }
     }
     private func rebuildTray() {
+        let focused = focusIdentifier(in:trayPanel)
+        defer { restoreFocus(focused,in:trayPanel,fallback:trayButton) }
         trayPanel?.removeFromSuperview(); trayPanel = nil
         trayButton?.state = trayOpen ? .on : .off
         guard trayOpen, let content = window.contentView else { return }
@@ -265,6 +286,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         header.addArrangedSubview(title); header.addArrangedSubview(button("Close",#selector(toggleTray))); stack.addArrangedSubview(header)
         let actions = NSStackView(); actions.spacing = 7
         actions.addArrangedSubview(button("Add files",#selector(addTrayFiles))); actions.addArrangedSubview(button("Paste",#selector(pasteToTray))); actions.addArrangedSubview(button("Capture",#selector(captureToTray))); stack.addArrangedSubview(actions)
+        stack.addArrangedSubview(button("Undo last removal",#selector(undoTrayRemoval)))
+        stack.addArrangedSubview(button("Empty removed references…",#selector(emptyRemovedTray)))
+        for diagnostic in trayDiagnostics {
+            if let id = diagnostic.referenceID {
+                let damaged = button("Set damaged item aside",#selector(removeDamagedTrayReference(_:)),symbol:"exclamationmark.triangle")
+                damaged.identifier = NSUserInterfaceItemIdentifier(id.uuidString); damaged.toolTip = diagnostic.message; stack.addArrangedSubview(damaged)
+            }
+        }
         let hint = NSTextField(wrappingLabelWithString:trayReferences.isEmpty ? "Collect a few references here. They stay saved until you remove them." : "Click a reference to place a copy. Originals stay in the tray.")
         hint.font = .systemFont(ofSize:11); hint.textColor = .secondaryLabelColor; stack.addArrangedSubview(hint)
         hint.widthAnchor.constraint(equalToConstant:270).isActive = true
@@ -277,29 +306,30 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             place.widthAnchor.constraint(equalToConstant:230).isActive = true; place.cell?.lineBreakMode = .byTruncatingMiddle
             let remove = button("",#selector(removeTrayReference(_:)),symbol:"xmark")
             remove.setAccessibilityLabel("Remove "+reference.title+" from tray"); remove.toolTip = "Remove from tray; placed copies stay on boards"
-            remove.identifier = place.identifier; row.addArrangedSubview(place); row.addArrangedSubview(remove); rows.addArrangedSubview(row)
+            remove.identifier = NSUserInterfaceItemIdentifier("remove:"+reference.id.uuidString); row.addArrangedSubview(place); row.addArrangedSubview(remove); rows.addArrangedSubview(row)
         }
         scroll.documentView = rows; rows.layoutSubtreeIfNeeded(); rows.setFrameSize(NSSize(width:270,height:max(1,rows.fittingSize.height)))
         scroll.widthAnchor.constraint(equalToConstant:280).isActive = true
         let height = scroll.heightAnchor.constraint(equalToConstant:min(255,max(1,rows.fittingSize.height))); height.priority = .defaultHigh; height.isActive = true
         NSLayoutConstraint.activate([panel.topAnchor.constraint(equalTo:content.topAnchor,constant:170),panel.trailingAnchor.constraint(equalTo:content.trailingAnchor,constant:-20),panel.bottomAnchor.constraint(lessThanOrEqualTo:content.bottomAnchor,constant:-90),stack.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:12),stack.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-12),stack.topAnchor.constraint(equalTo:panel.topAnchor,constant:12),stack.bottomAnchor.constraint(equalTo:panel.bottomAnchor,constant:-12)])
     }
-    private func performTray(_ action: @escaping (CaptureTray) throws -> Void) {
+    private func performTray(success: String? = nil, _ action: @escaping (CaptureTray) throws -> Void) {
         guard !isBusy, let library else { return }
         let tray = CaptureTray(libraryRoot:library.root)
         isBusy = true; pendingImports += 1
         io.async {
             var failure: Error?
             do { try action(tray) } catch { failure = error }
-            let references = Result { try tray.references() }
+            let references = Result { try tray.scan() }
             let actionError = failure
             DispatchQueue.main.async {
                 var failure = actionError
                 self.pendingImports -= 1; self.isBusy = false
-                switch references { case .success(let items): self.trayReferences = items
+                switch references { case .success(let scan): self.trayReferences = scan.references; self.trayDiagnostics = scan.diagnostics
                 case .failure(let error): failure = failure ?? error }
                 self.rebuildTray()
                 if let failure { self.showError(failure) }
+                else if let success { self.announce(success) }
                 if self.afterSave != nil { self.saveNow() }
             }
         }
@@ -327,8 +357,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         else { showError(CaptureTrayError.invalidImage) }
     }
     @objc func removeTrayReference(_ sender: NSButton) {
+        guard let value = sender.identifier?.rawValue.replacingOccurrences(of:"remove:",with:""), let id = UUID(uuidString:value) else { return }
+        performTray(success:"Reference removed. Undo last removal restores it.") {_ = try $0.remove(id)}
+    }
+    @objc func undoTrayRemoval() { performTray(success:"Reference restored") {_ = try $0.restoreLastRemoved()} }
+    @objc func emptyRemovedTray() {
+        guard !isBusy else { return }
+        let alert = NSAlert(); alert.messageText = "Permanently remove the tray’s deleted references?"
+        alert.informativeText = "This frees their storage. Placed board copies are kept. You will no longer be able to undo these tray removals."
+        alert.addButton(withTitle:"Empty removed references"); alert.addButton(withTitle:"Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { performTray {_ = try $0.emptyRemoved()} }
+    }
+    @objc func removeDamagedTrayReference(_ sender: NSButton) {
         guard let value = sender.identifier?.rawValue, let id = UUID(uuidString:value) else { return }
-        performTray {try $0.remove(id)}
+        performTray {_ = try $0.removeDamaged(id)}
     }
     @objc func placeTrayReference(_ sender: NSButton) {
         guard !isBusy, let library, let value = sender.identifier?.rawValue, let id = UUID(uuidString:value), activeURL != nil else { return }
@@ -354,6 +396,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         canvas.onRecognition = { [weak self] name in
             self?.automaticShapesControl?.title = "Auto shapes · "+name
             self?.automaticShapesControl?.setAccessibilityLabel("Auto shapes. Recognised "+name+". Undo restores the original ink.")
+            self?.announce("Recognised "+name+". Undo restores the original ink.")
         }
         canvas.onEditTeX = { [weak self] id in self?.editTeX(id) }
         canvas.onToolChange = { [weak self] in self?.updateTool() }
@@ -361,6 +404,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         canvas.onEdit = { [weak self] in self?.edited() }
         canvas.onViewChange = { [weak self] in self?.edited(delay: 0.8) }
         canvas.onImport = { [weak self] data,ext,point in self?.importImage(data, ext: ext, at: point) }
+        canvas.onImportFiles = { [weak self] urls,point in self?.importImageFiles(urls,at:point) }
         canvas.onHide = { [weak self] in self?.hideBoard() }
         canvas.onNew = { [weak self] in self?.newIdea() }
         canvas.onRename = { [weak self] in self?.renameIdea() }
@@ -386,18 +430,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             do {
                 let library = try Library(root: root)
                 var items = try library.list()
-                if items.isEmpty {
-                    if root.standardizedFileURL == self.demoRoot.standardizedFileURL { try DemoContent.populate(library) }
-                    else { _ = try library.create() }
-                    items = try library.list()
-                }
                 if root.standardizedFileURL == self.demoRoot.standardizedFileURL {
-                    try PDEExamples.installMissing(library); items = try library.list()
+                    try DemoContent.populate(library); items = try library.list()
                 }
+                if items.isEmpty { _ = try library.create(); items = try library.list() }
                 DispatchQueue.main.async {
                     guard generation == self.libraryGeneration else { return }
                     self.library = library; self.items = items
-                    self.trayReferences = []; self.trayOpen = false; self.rebuildTray()
+                    self.trayReferences = []; self.trayDiagnostics = []; self.trayOpen = false; self.rebuildTray()
                     self.shelfOrder = UserDefaults.standard.data(forKey:"shelfOrder:"+library.root.path).flatMap {try? JSONDecoder().decode(ShelfOrder.self,from:$0)} ?? ShelfOrder()
                     self.watches = IdeaStatus.allCases.compactMap { DirectoryWatch(url: library.folder($0)) { [weak self] in self?.scheduleRefresh() } }
                     self.isBusy = false; self.shelfPage = 0; self.buildShelf()
@@ -424,6 +464,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     }
     private func rebuildCards() {
         guard !collapsed else { return }
+        let focused = focusIdentifier(in:cards)
+        defer { restoreFocus(focused,in:cards,fallback:search) }
         for view in cards.arrangedSubviews { cards.removeArrangedSubview(view); view.removeFromSuperview() }
         let status = IdeaStatus.allCases[max(0,min(2,statusControl?.selectedSegment ?? 0))]
         let query = search.stringValue
@@ -437,13 +479,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 b.image?.size = NSSize(width:12,height:12); b.imagePosition = .imageLeading
             }
             b.identifier = NSUserInterfaceItemIdentifier(item.url.path)
-            b.contentTintColor = status == .finished ? .systemGreen : status == .unfinished ? .systemRed : .secondaryLabelColor
+            b.contentTintColor = .labelColor
             b.isBordered = false; b.wantsLayer = true
             let tint: NSColor = status == .finished ? .systemGreen : status == .unfinished ? .systemRed : .secondaryLabelColor
             b.layer?.backgroundColor = tint.withAlphaComponent(0.09).cgColor
             b.layer?.cornerRadius = 7; b.layer?.borderWidth = item.url == activeURL ? 1 : 0
             b.layer?.borderColor = tint.withAlphaComponent(0.5).cgColor
-            b.attributedTitle = NSAttributedString(string:"  "+b.title+"  ",attributes:[.foregroundColor:tint,.font:NSFont.systemFont(ofSize:12,weight:.medium)])
+            b.attributedTitle = NSAttributedString(string:"  "+b.title+"  ",attributes:[.foregroundColor:NSColor.labelColor,.font:NSFont.systemFont(ofSize:13,weight:.medium)])
             b.attributedAlternateTitle = b.attributedTitle
             b.heightAnchor.constraint(equalToConstant:30).isActive = true
             b.toolTip = "\(item.title) — \(status.rawValue)\nClick to reopen. Control-click for file actions."
@@ -464,6 +506,24 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             label.textColor = .secondaryLabelColor; label.font = .systemFont(ofSize: 12); cards.addArrangedSubview(label)
         }
         cards.layoutSubtreeIfNeeded(); cards.setFrameSize(NSSize(width: max(300,cards.fittingSize.width),height: 36))
+    }
+    private func focusIdentifier(in container: NSView?) -> String? {
+        guard let container, let view = window.firstResponder as? NSView, view.isDescendant(of:container) else { return nil }
+        return view.identifier?.rawValue ?? "focus-fallback"
+    }
+    private func restoreFocus(_ key: String?, in container: NSView?, fallback: NSView?) {
+        guard let key else { return }
+        func find(_ view: NSView) -> NSView? {
+            if view.identifier?.rawValue == key { return view }
+            for child in view.subviews { if let match = find(child) { return match } }
+            return nil
+        }
+        if let view = container.flatMap({find($0)}) ?? fallback {
+            window.makeFirstResponder(view); NSAccessibility.post(element:view,notification:.focusedUIElementChanged)
+        }
+    }
+    private func announce(_ message: String) {
+        NSAccessibility.post(element:window as Any,notification:.announcementRequested,userInfo:[.announcement:message,.priority:NSAccessibilityPriorityLevel.medium.rawValue])
     }
     private func cardMenu(_ item: ShelfItem) -> NSMenu {
         let menu = NSMenu(); menu.autoenablesItems = false
@@ -508,7 +568,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             do {
                 let board = try self.library.load(url)
                 DispatchQueue.main.async {
-                    self.activeURL = url; self.revision = 0; self.savedRevision = 0; self.dirtySince = nil; self.saveBlocked = false
+                    self.activeURL = url; self.revision = 0; self.savedRevision = 0; self.dirtySince = nil; self.saveBlocked = false; self.saveFailure = nil; self.saveRetryCount = 0
                     self.canvas.load(board, at: url); UserDefaults.standard.set(url.path,forKey:"lastBoard:"+self.library.root.path); self.isBusy = false
                     self.statusControl?.selectedSegment = IdeaStatus.allCases.firstIndex(where: {$0.rawValue == url.deletingLastPathComponent().lastPathComponent}) ?? 0
                     self.automaticShapesControl?.title = "Auto shapes"; self.automaticShapesControl?.setAccessibilityLabel("Auto shapes")
@@ -519,18 +579,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     }
     func edited(delay: Double = 0.4) {
         guard activeURL != nil else { return }
-        revision += 1; saveLabel.stringValue = saveBlocked ? "Save a copy" : "Saving…"
+        revision += 1; saveRetryCount = 0; saveLabel.stringValue = saveBlocked ? "Save a copy" : "Saving…"
         let now = ProcessInfo.processInfo.systemUptime
         if dirtySince == nil { dirtySince = now }
         zoomLabel.stringValue = "\(Int(canvas.board.viewport.zoom*100))%"
         saveWork?.cancel(); let work = DispatchWorkItem { [weak self] in self?.saveNow() }; saveWork = work
-        let boundedDelay = min(delay,max(0,2-(now-(dirtySince ?? now))))
+        let large = canvas.board.ink.count > 2000 || canvas.board.ink.reduce(0,{$0+$1.points.count}) > 100_000
+        let boundedDelay = min(large ? max(1.2,delay) : delay,max(0,(large ? 10 : 2)-(now-(dirtySince ?? now))))
         DispatchQueue.main.asyncAfter(deadline: .now()+boundedDelay, execute: work)
     }
     func saveNow() {
         saveWork?.cancel(); saveWork = nil
         guard !isSaving, !saveBlocked, let url = activeURL else { return }
-        guard revision != savedRevision else { guard pendingImports == 0 else { return }; let action = afterSave; afterSave = nil; action?(); return }
+        guard revision != savedRevision else { guard !backgroundWorkPending else { return }; let action = afterSave; afterSave = nil; action?(); return }
         isSaving = true; let board = canvas.board, savingRevision = revision
         io.async {
             let result = Result { try self.library.save(board, at: url) }
@@ -538,13 +599,48 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 self.isSaving = false
                 switch result {
                 case .success:
+                    self.saveFailure = nil; self.saveRetryCount = 0
                     self.savedRevision = savingRevision; self.dirtySince = self.revision == savingRevision ? nil : ProcessInfo.processInfo.systemUptime; self.updateLabels()
                     if self.revision != self.savedRevision { self.saveNow() }
-                    else if self.pendingImports == 0 { let action = self.afterSave; self.afterSave = nil; action?() }
+                    else if !self.backgroundWorkPending { let action = self.afterSave; self.afterSave = nil; action?() }
                 case .failure(let error):
-                    self.saveBlocked = true; self.afterSave = nil; self.isBusy = false; self.saveLabel.stringValue = "Save a copy"
+                    self.saveFailure = error
+                    if let boardError = error as? BoardError {
+                        switch boardError { case .conflict, .missingFile: self.saveBlocked = true; default: break }
+                    }
+                    self.afterSave = nil; self.isBusy = self.renderingTeX || self.captureProcess != nil
+                    self.saveLabel.stringValue = self.saveBlocked ? "Save a copy" : "Save failed · File → Retry saving"
                     if self.terminationPending { self.terminationPending = false; NSApp.reply(toApplicationShouldTerminate:false) }
-                    self.showError(error)
+                    if !self.saveBlocked, (error as NSError).domain == NSCocoaErrorDomain, self.saveRetryCount < 2 {
+                        self.saveRetryCount += 1
+                        let work = DispatchWorkItem { [weak self] in self?.saveNow() }; self.saveWork = work
+                        DispatchQueue.main.asyncAfter(deadline:.now()+Double(self.saveRetryCount)*2,execute:work)
+                    } else { self.showError(error) }
+                }
+            }
+        }
+    }
+    @objc func retrySave() {
+        guard !isBusy, !saveBlocked else { return }
+        canvas.finishEditing(); canvas.finishGesture(); saveRetryCount = 0; saveNow()
+    }
+    @objc func compactAssets() {
+        guard !isBusy, let package = activeURL else { return }
+        let alert = NSAlert(); alert.messageText = "Remove unused assets from this idea?"
+        alert.informativeText = "Only image and equation files unused by this board, its previous save, recovery history and current undo history will be removed. This cleanup cannot be undone."
+        alert.addButton(withTitle:"Remove unused assets"); alert.addButton(withTitle:"Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        afterSaving {
+            self.isBusy = true; let retained = self.canvas.undoReferencedAssets
+            self.io.async {
+                let result = Result { try self.library.compactAssets(at:package,retaining:retained) }
+                DispatchQueue.main.async {
+                    self.isBusy = false
+                    switch result {
+                    case .success(let names): self.saveLabel.stringValue = "Removed \(names.count) unused asset(s)"; self.announce(self.saveLabel.stringValue)
+                    case .failure(let error): self.showError(error)
+                    }
+                    if self.afterSave != nil { self.saveNow() }
                 }
             }
         }
@@ -552,14 +648,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     private func afterSaving(_ action: @escaping () -> Void) {
         guard !isBusy, afterSave == nil else { return }
         canvas.finishEditing(); canvas.finishGesture()
-        guard !saveBlocked else { showError(BoardError.conflict); return }
+        guard !saveBlocked else { showError(saveFailure ?? BoardError.conflict); return }
         if activeURL == nil { action(); return }
         isBusy = true
         afterSave = { self.isBusy = false; action() }; saveNow()
     }
     private func updateLabels() {
         titleLabel.stringValue = activeURL?.deletingPathExtension().lastPathComponent ?? "Whiteboard"
-        saveLabel.stringValue = saveBlocked ? "Save a copy" : savedRevision == revision ? "Saved locally" : "Saving…"
+        saveLabel.stringValue = saveBlocked ? "Save a copy" : saveFailure != nil ? "Save failed · Retry saving" : savedRevision == revision ? "Saved locally" : "Saving…"
         zoomLabel.stringValue = "\(Int(canvas.board.viewport.zoom*100))%"
         if isDemo { saveLabel.stringValue = "Demo · "+saveLabel.stringValue }
         penWidthControl?.title = "\(canvas.penWidth.formatted()) pt"
@@ -572,7 +668,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         backgroundControl?.toolTip = "Change background: desktop, paper or dim"
     }
     private func importImage(_ data: Data, ext: String, at point: Point) {
-        guard let url = activeURL, !isBusy, data.count <= 32*1024*1024 else { return }
+        guard let url = activeURL, !isBusy else { return }
+        guard data.count <= 32*1024*1024 else { showError(CaptureTrayError.tooLarge); return }
         let id = canvas.board.id; pendingImports += 1
         io.async {
             do {
@@ -583,7 +680,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                     self.pendingImports -= 1
                     guard self.activeURL == url, self.canvas.board.id == id else { return }
                     self.canvas.checkpoint(); self.canvas.board.images.append(BoardImage(asset: asset, frame: Rect(point.x,point.y,width,height)))
-                    self.canvas.needsDisplay = true; self.edited(); if self.afterSave != nil { self.saveNow() }
+                    self.canvas.reindex(); self.canvas.needsDisplay = true; self.edited(); if self.afterSave != nil { self.saveNow() }
                 }
             } catch { DispatchQueue.main.async { self.pendingImports -= 1; self.showError(error); if self.afterSave != nil { self.saveNow() } } }
         }
@@ -672,6 +769,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     @objc func duplicateReference() { canvas.duplicateSelection(withAnnotations:false) }
     @objc func undo() { canvas.undoEdit() }
     @objc func redo() { canvas.redoEdit() }
+    @objc func nextObject() { guard !isBusy else { return }; window.makeFirstResponder(canvas); canvas.selectNextObject(backwards:false) }
+    @objc func previousObject() { guard !isBusy else { return }; window.makeFirstResponder(canvas); canvas.selectNextObject(backwards:true) }
+    @objc func editObject() { guard !isBusy else { return }; _ = canvas.editSelectedObject() }
     @objc func clearInk() { canvas.clearInk() }
     @objc func zoomIn() { canvas.zoom(1.2) }
     @objc func zoomOut() { canvas.zoom(1/1.2) }
@@ -682,9 +782,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         updateLabels()
     }
     @objc func lockImage() {
+        guard !isBusy, canvas.acceptsInput, canvas.board.images.contains(where:{canvas.selected.contains($0.id)}) else { return }
         canvas.checkpoint()
         for i in canvas.board.images.indices where canvas.selected.contains(canvas.board.images[i].id) { canvas.board.images[i].locked.toggle() }
-        canvas.needsDisplay = true; edited()
+        canvas.reindex(); canvas.needsDisplay = true; edited()
     }
     @objc func newIdea() {
         afterSaving {
@@ -763,37 +864,83 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         if panel.runModal() == .OK, let url = panel.url { afterSaving { self.openLibrary(url) } }
     }
     @objc func importImageFile() {
+        guard !isBusy else { return }
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.png,.jpeg,.tiff,.heic,.gif]; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url, activeURL != nil, !isBusy else { return }
-        let boardID = canvas.board.id
         let point = canvas.board.viewport.world(Point(canvas.bounds.midX-250,canvas.bounds.midY-120))
+        importImageFiles([url],at:point)
+    }
+    private func importImageFiles(_ urls: [URL], at point: Point) {
+        guard !isBusy, let package = activeURL, let library else { return }
+        let boardID = canvas.board.id
+        isBusy = true; pendingImports += 1
         io.async {
-            do {
-                let size = try url.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? 0
-                guard size <= 32*1024*1024 else { throw BoardError.invalidData }
-                let data = try Data(contentsOf:url)
-                DispatchQueue.main.async { guard self.canvas.board.id == boardID else { return }; self.importImage(data,ext:url.pathExtension,at:point) }
-            } catch { DispatchQueue.main.async { self.showError(error) } }
+            var placed: [BoardImage] = [], failures: [String] = []
+            for (index,url) in urls.prefix(8).enumerated() {
+                do {
+                    let item = try autoreleasepool { () throws -> BoardImage in
+                        let size = try url.resourceValues(forKeys:[.fileSizeKey]).fileSize ?? Int.max
+                        guard size <= 32*1024*1024 else { throw CaptureTrayError.tooLarge }
+                        let data = try Data(contentsOf:url)
+                        guard let dimensions = ImagePool.dimensions(data) else { throw CaptureTrayError.invalidImage }
+                        let asset = try library.importAsset(data:data,extension:url.pathExtension,to:package)
+                        let width = min(720,dimensions.width)
+                        return BoardImage(asset:asset,frame:Rect(point.x+Double(index)*30,point.y+Double(index)*30,width,width*dimensions.height/dimensions.width))
+                    }
+                    placed.append(item)
+                } catch { failures.append(url.lastPathComponent+": "+error.localizedDescription) }
+            }
+            let result = placed, errors = failures, skipped = max(0,urls.count-8)
+            DispatchQueue.main.async {
+                self.isBusy = false; self.pendingImports -= 1
+                if self.canvas.board.id == boardID, !result.isEmpty {
+                    self.canvas.checkpoint(); self.canvas.board.images += result; self.canvas.reindex(); self.canvas.needsDisplay = true; self.edited()
+                }
+                if !errors.isEmpty || skipped > 0 {
+                    let alert = NSAlert(); alert.messageText = "Imported \(result.count) image(s)"
+                    alert.informativeText = (skipped > 0 ? "\(skipped) files were skipped; place up to eight at a time.\n\n" : "")+errors.joined(separator:"\n")
+                    alert.addButton(withTitle:"OK"); alert.runModal()
+                }
+                if self.afterSave != nil { self.saveNow() }
+            }
         }
     }
     @objc func showScreens() {
         let menu = NSMenu()
-        for (i,screen) in NSScreen.screens.enumerated() {
+        for screen in NSScreen.screens {
             let item = NSMenuItem(title:"\(screenID(screen) == onScreen ? "✓ " : "")\(screen.localizedName) — \(Int(screen.frame.width)) × \(Int(screen.frame.height))",action:#selector(pickScreen(_:)),keyEquivalent:"")
-            item.tag = i; item.target = self; menu.addItem(item)
+            item.representedObject = NSNumber(value:screenID(screen)); item.target = self; menu.addItem(item)
         }
         menu.popUp(positioning:nil,at:NSEvent.mouseLocation,in:nil)
     }
-    @objc func pickScreen(_ sender: NSMenuItem) { guard NSScreen.screens.indices.contains(sender.tag) else { return }; move(to:NSScreen.screens[sender.tag]); showBoard() }
+    @objc func pickScreen(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? NSNumber, let screen = NSScreen.screens.first(where:{screenID($0) == id.uint32Value}) else { return }
+        move(to:screen); showBoard()
+    }
     @objc func bringHere() { if let screen = NSScreen.screens.first(where:{$0.frame.contains(NSEvent.mouseLocation)}) { move(to:screen) }; showBoard() }
     private func screenID(_ screen: NSScreen) -> CGDirectDisplayID { (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0 }
-    private func move(to screen: NSScreen) { canvas.finishGesture(); onScreen = screenID(screen); window.setFrame(screen.visibleFrame,display:true) }
+    private func move(to screen: NSScreen) {
+        canvas.finishEditing(); canvas.finishGesture()
+        let old = canvas.bounds.size, oldView = canvas.board.viewport
+        onScreen = screenID(screen); window.setFrame(screen.visibleFrame,display:true)
+        if old.width > 0, old.height > 0, (canvas.bounds.width < old.width || canvas.bounds.height < old.height) {
+            let scale = min(canvas.bounds.width/old.width,canvas.bounds.height/old.height)
+            let center = oldView.world(Point(old.width/2,old.height/2))
+            canvas.board.viewport.zoom = max(0.15,oldView.zoom*scale)
+            canvas.board.viewport.origin = Point(center.x-canvas.bounds.width/2/canvas.board.viewport.zoom,center.y-canvas.bounds.height/2/canvas.board.viewport.zoom)
+            canvas.needsDisplay = true; edited(delay:0.8)
+        }
+    }
     @objc func displaysChanged() {
         let screen = NSScreen.screens.first(where:{screenID($0) == onScreen}) ?? NSScreen.main
         if let screen { move(to:screen) }
     }
     @objc func willSleep() { if usingDesktop { hideBoard() } else { canvas.finishEditing(); canvas.finishGesture(); saveNow() } }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(quit) || menuItem.action == #selector(toggleBoard) || menuItem.action == #selector(showHelp) { return true }
+        if isBusy || terminationPending { return false }
+        if menuItem.action == #selector(restoreDemoCopies) { return isDemo }
+        if menuItem.action == #selector(retrySave) { return !saveBlocked && revision != savedRevision && !isSaving }
         if menuItem.action == #selector(cropImage) { return !isBusy && canvas.selected.count == 1 && canvas.board.images.contains {canvas.selected.contains($0.id) && !$0.locked && $0.vectorAsset == nil} }
         if menuItem.action == #selector(restoreImage) { return !isBusy && canvas.board.images.contains {canvas.selected.contains($0.id) && !$0.locked && $0.crop != nil} }
         return true
@@ -814,17 +961,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         texDrafts[kind] = source.code
         let boardID = canvas.board.id
         let point = canvas.board.viewport.world(Point(canvas.bounds.midX-220,canvas.bounds.midY-100))
-        renderingTeX = true; pendingImports += 1; saveLabel.stringValue = "Rendering…"
+        renderingTeX = true; isBusy = true; pendingImports += 1; saveLabel.stringValue = "Rendering…"
         typesetting.async {
             let result = Result { try TeXCompiler.compile(source) }
             self.io.async {
                 let stored = result.flatMap { render in Result { () -> (String,String,Double,Double) in
-                    let png = try self.library.importAsset(data:render.png,extension:"png",to:package)
-                    let pdf = try self.library.importAsset(data:render.pdf,extension:"pdf",to:package)
-                    return (png,pdf,render.width,render.height)
+                    let assets = try self.library.importAssets([(data:render.png,extension:"png"),(data:render.pdf,extension:"pdf")],to:package)
+                    return (assets[0],assets[1],render.width,render.height)
                 } }
                 DispatchQueue.main.async {
-                    self.renderingTeX = false; self.pendingImports -= 1
+                    self.renderingTeX = false; self.pendingImports -= 1; self.isBusy = false
                     guard self.canvas.board.id == boardID, self.activeURL == package else { self.saveNow(); return }
                     switch stored {
                     case .success(let values):
@@ -870,11 +1016,42 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 guard let data = rep.representation(using:.png,properties:[:]) else { throw BoardError.invalidData }
                 try data.write(to:url,options:.atomic)
             }
-            DispatchQueue.main.async { self.exporting = false; if case .failure(let error) = result { self.showError(error) } }
+            DispatchQueue.main.async { self.exporting = false; if case .failure(let error) = result { self.showError(error) }; if self.afterSave != nil { self.saveNow() } }
         }
     }
     @objc func exportPNG() { exportDocument(pdf:false) }
     @objc func exportPDF() { exportDocument(pdf:true) }
+    @objc func describeImage() {
+        guard !isBusy, canvas.selected.count == 1, let index = canvas.board.images.firstIndex(where:{canvas.selected.contains($0.id)}) else { return }
+        let alert = NSAlert(); alert.messageText = "Describe this image or equation"
+        alert.informativeText = "Include its meaning, labels and any important relationships. VoiceOver and HTML exports use this description."
+        let scroll = NSScrollView(frame:NSRect(x:0,y:0,width:420,height:160)); scroll.hasVerticalScroller = true
+        let text = NSTextView(frame:scroll.bounds); text.isRichText = false; text.font = .systemFont(ofSize:15); text.string = canvas.board.images[index].accessibilityDescription ?? ""
+        text.setAccessibilityLabel("Image description"); scroll.documentView = text; alert.accessoryView = scroll
+        alert.addButton(withTitle:"Save description"); alert.addButton(withTitle:"Cancel"); alert.window.initialFirstResponder = text
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let value = text.string
+        guard value.utf8.count <= 2048 else { showError(NSError(domain:"Whiteboard.description",code:1,userInfo:[NSLocalizedDescriptionKey:"Use a shorter description (up to 2 KiB of text). The existing description is unchanged."])); return }
+        guard canvas.board.images[index].accessibilityDescription != value else { return }
+        canvas.checkpoint(); canvas.board.images[index].accessibilityDescription = value; canvas.reindex(); edited(); announce("Description saved")
+    }
+    @objc func exportHTML() {
+        guard !isBusy, !exporting, let package = activeURL else { return }
+        canvas.finishEditing(); canvas.finishGesture()
+        let board = canvas.selected.isEmpty ? canvas.board : canvas.board.selection(canvas.selected)
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.html]; panel.nameFieldStringValue = titleLabel.stringValue+".html"
+        panel.message = "A visual preview with readable notes, image descriptions and equation source."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        exporting = true
+        io.async {
+            let result = Result { try BoardRenderer.html(board,package:package).write(to:url,atomically:true,encoding:.utf8) }
+            DispatchQueue.main.async {
+                self.exporting = false
+                if case .failure(let error) = result { self.showError(error) }
+                if self.afterSave != nil { self.saveNow() }
+            }
+        }
+    }
     private func exportDocument(pdf: Bool) {
         canvas.finishEditing(); canvas.finishGesture()
         guard let package = activeURL, !exporting else { return }
@@ -889,7 +1066,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 let data = try pdf ? BoardRenderer.pdf(board,package:package) : BoardRenderer.png(board,package:package)
                 try data.write(to:url,options:.atomic)
             }
-            DispatchQueue.main.async { self.exporting = false; self.updateLabels(); if case .failure(let error) = result { self.showError(error) } }
+            DispatchQueue.main.async { self.exporting = false; self.updateLabels(); if case .failure(let error) = result { self.showError(error) }; if self.afterSave != nil { self.saveNow() } }
         }
     }
     private func copySelection() {
@@ -902,6 +1079,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 self.exporting = false
                 switch result { case .success(let data): NSPasteboard.general.clearContents(); NSPasteboard.general.setData(data,forType:.png)
                 case .failure(let error): self.showError(error) }
+                if self.afterSave != nil { self.saveNow() }
             }
         }
     }
@@ -982,6 +1160,24 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         guard !isDemo else { return }
         afterSaving { self.openLibrary(self.demoRoot) }
     }
+    @objc func restoreDemoCopies() {
+        guard isDemo, !isBusy else { return }
+        let alert = NSAlert(); alert.messageText = "Add fresh copies of the three demo examples?"
+        alert.informativeText = "Your current examples and edits stay saved. Fresh originals get unique filenames."
+        alert.addButton(withTitle:"Add fresh examples"); alert.addButton(withTitle:"Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        afterSaving {
+            self.isBusy = true; self.pendingImports += 1
+            self.io.async {
+                let result = Result { try DemoContent.populate(self.library,restore:true) }
+                DispatchQueue.main.async {
+                    self.isBusy = false; self.pendingImports -= 1
+                    if case .failure(let error) = result { self.showError(error) }
+                    self.refreshShelf(); if self.afterSave != nil { self.saveNow() }
+                }
+            }
+        }
+    }
     @objc func returnToIdeas() {
         guard isDemo else { return }
         afterSaving { self.openLibrary(self.root) }
@@ -989,23 +1185,44 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     @objc func captureScreenshot() { performScreenCapture(intoTray:false) }
     private func performScreenCapture(intoTray: Bool) {
         guard !isBusy, activeURL != nil else { return }
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            showError(NSError(domain:"Whiteboard.capture",code:1,userInfo:[NSLocalizedDescriptionKey:"Allow Whiteboard in System Settings → Privacy & Security → Screen Recording, then try Capture again."])); return
+        }
         let documentID = canvas.board.id
         let point = canvas.board.viewport.world(Point(canvas.bounds.midX-250,canvas.bounds.midY-150))
-        hideBoard(); isBusy = true
+        isBusy = true; pendingImports += 1; hideBoard()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".png")
         let process = Process(); process.executableURL = URL(fileURLWithPath:"/usr/sbin/screencapture")
+        captureProcess = process
         process.arguments = ["-i","-o","-x",url.path]
         process.terminationHandler = { _ in
-            let data = try? Data(contentsOf:url); try? FileManager.default.removeItem(at:url)
+            let result = Result { () throws -> Data? in
+                guard FileManager.default.fileExists(atPath:url.path) else { return nil }
+                defer { try? FileManager.default.removeItem(at:url) }
+                guard let size = try url.resourceValues(forKeys:[.fileSizeKey]).fileSize, size <= 32*1024*1024 else { throw CaptureTrayError.tooLarge }
+                let data = try Data(contentsOf:url)
+                guard ImagePool.dimensions(data) != nil else { throw CaptureTrayError.invalidImage }
+                return data
+            }
             DispatchQueue.main.async {
-                self.isBusy = false; self.showBoard()
-                if let data, self.canvas.board.id == documentID {
-                    if intoTray { self.performTray {try $0.add(data,extension:"png",title:"Screenshot")} }
-                    else { self.importImage(data,ext:"png",at:point) }
+                self.captureProcess = nil; self.pendingImports -= 1; self.isBusy = false
+                if !self.terminationPending { self.showBoard() }
+                switch result {
+                case .success(let data):
+                    if let data, self.canvas.board.id == documentID {
+                        if intoTray { self.performTray {try $0.add(data,extension:"png",title:"Screenshot")} }
+                        else { self.importImage(data,ext:"png",at:point) }
+                    }
+                case .failure(let error): self.showError(error)
                 }
+                if self.afterSave != nil { self.saveNow() }
             }
         }
-        do { try process.run() } catch { isBusy = false; showBoard(); showError(error) }
+        do { try process.run() } catch {
+            captureProcess = nil; pendingImports -= 1; isBusy = false
+            try? FileManager.default.removeItem(at:url); showBoard(); showError(error)
+            if afterSave != nil { saveNow() }
+        }
     }
     func showError(_ error: Error) {
         let alert = NSAlert(); alert.messageText = "Your work needs attention"; alert.informativeText = error.localizedDescription
@@ -1013,15 +1230,17 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     }
     @objc func showHelp() {
         let alert = NSAlert(); alert.messageText = "Whiteboard · native preview"
-        alert.informativeText = "⇧⌘B show / hide\nP pen · H highlighter · E eraser · V select · T text\nAuto shapes: draw with the pen and lift to recognise. Undo restores the original ink.\nHold Shift with the pen to keep freehand, or turn Auto shapes off.\nL line · A arrow · R rectangle · O ellipse\nHold Shift for equal sides or 45° angles. Escape cancels a shape.\nSelect a screenshot, then C to crop. Return applies; Escape cancels.\nEdit → Restore full image removes its crop. Ink stays in place.\nHold ⌘⇧Space to use the desktop; release to return.\nRight-drag erases ink. Scroll for more space.\nPinch or ⌘ scroll to zoom. Option-drag pans.\n⌘Z undo · ⇧⌘Z redo · ⌘V paste · Return rename\n\nSelect images or ink to move them. Drag an image’s bottom-right handle to resize its annotations together. ⌘D duplicates; ⌘1 fits all content; ⌘C copies a selection as PNG. Control-click a shelf file to pin, reorder, change status or archive. Demo opens a separate editable sample workspace; My ideas brings you back.\n\nAutosaves after edits. Handwriting transcription, thumbnails and drag-to-status are planned; see docs/IMPLEMENTATION.md."
+        alert.informativeText = "Capture a thought\n⇧⌘B shows or hides the board. P draws; T adds a note. Return adds a text line; ⌘Return saves the note. Use the tray to collect references.\n\nArrange your work\nTab / Shift–Tab selects objects. Arrows move; Shift moves farther. Option–arrows resize an image. Return edits selected text or maths. Edit → Image description adds a VoiceOver description.\n\nDraw and navigate\nAuto shapes tidy clear strokes when you lift; Undo restores your ink. L / A / R / O draws a line, arrow, rectangle or ellipse. Scroll for room; pinch to zoom; ⌘1 fits everything. Hold ⌘⇧Space to use the desktop.\n\nCrop and recover\nSelect an image and press C. Drag a crop, or resize it with arrows and reposition it with Option–arrows. Return applies; Escape cancels. ⌘Z undoes edits. File → Save checkpoint and Recovery history keep earlier versions.\n\nReturn later\nThe shelf shows your saved filenames. Control-click for pin, reorder, status and archive actions. Demo opens everyday examples; My ideas returns to your work."
         alert.addButton(withTitle:"Got it"); alert.runModal()
     }
     @objc func quit() { NSApp.terminate(nil) }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         canvas.finishEditing(); canvas.finishGesture()
-        if saveBlocked { showError(BoardError.conflict); return .terminateCancel }
-        if savedRevision == revision && !isSaving && pendingImports == 0 { return .terminateNow }
+        if saveBlocked { showError(saveFailure ?? BoardError.conflict); return .terminateCancel }
+        if savedRevision == revision && !isSaving && !isBusy && !backgroundWorkPending { return .terminateNow }
         terminationPending = true
-        afterSave = { self.terminationPending = false; NSApp.reply(toApplicationShouldTerminate:true) }; saveNow(); return .terminateLater
+        afterSave = { self.terminationPending = false; NSApp.reply(toApplicationShouldTerminate:true) }
+        if let process = captureProcess, process.isRunning { process.terminate() }
+        io.async { DispatchQueue.main.async { self.saveNow() } }; return .terminateLater
     }
 }

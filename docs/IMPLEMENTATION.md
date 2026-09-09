@@ -28,34 +28,34 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 22 | Bring here | Built: menu-bar action uses the pointer’s display |
 | 23 | Move entire workspace | Built: one window contains canvas, shelf and controls |
 | 24 | Preserve work during monitor move | Built: document unchanged while window moves |
-| 25 | Fit destination display | Partial: window fits the available screen; zoom is preserved, not automatically fitted |
+| 25 | Fit destination display | Built: preserve view centre and reduce zoom on smaller displays without resizing objects; 15% minimum zoom |
 | 26 | Monitor cycling shortcut | Next |
 | 27 | Disconnect recovery | Built notification handler; physical unplug test still required |
 | 28 | Shared shelf | Built: one library and one active workspace |
 | 29 | Global show/hide | Built: Shift–Command–B registration |
 | 30 | Fresh space | Built: scrolls below current content |
 | 31 | No naming required | Built: unique Untitled idea filenames |
-| 32 | Type/draw; zoom out; scroll for space | Built |
+| 32 | Type/draw; zoom out; scroll for space | Built: native multiline notes, pan and zoom; explicit line breaks rather than resizable text wrapping |
 | 33 | Hold to interact underneath | Built: hold Command–Shift–Space; release returns the board. Physical held-key interaction and shortcut conflicts still need validation |
 | 34 | Background choices | Built: transparent, paper and dim |
 | 35 | Remember setup | Partial: per-board background and viewport, saved colour/width and last-opened idea; toolbar placement next |
 | 36 | Right mouse erase | Built: stroke eraser uses segment hit testing |
-| 37 | Quick title | Built: Return opens filename rename; remapping next |
+| 37 | Quick title | Built: Return with no editable object selected opens filename rename; remapping next |
 | 38 | Double-click clear | Next: current clear-ink action is explicit and undoable |
 | 39 | Movable compact toolbar | Partial: compact tools exist; capture button included; toolbar dragging next |
 | 40 | Drawing helpers | Built: automatic freehand line/arrow/rectangle/circle/ellipse recognition at pen-up, with original-ink Undo and an off switch; explicit tools and Shift constraints also available. Multi-stroke recognition and broader shape vocabulary remain future work |
 | 41 | Navigation | Partial: pan, zoom, reset, fresh space and fit-all; last-view history next |
 | 42 | Select and organise | Partial: selection, moving, screenshot resizing, locking and duplication; grouping next |
 | 43 | Separate clears | Partial: selection delete and clear ink; clear-everything control next |
-| 44 | Undo/redo | Built: bounded 40-edit in-memory Undo/Redo; separate dated recovery snapshots |
+| 44 | Undo/redo | Built: 40 entries and a 32 MiB estimated target per stack, retaining at least one checkpoint; separate dated recovery snapshots |
 | 45 | Temporary pointer ink | Next |
 | 46 | Built-in capture | Built: user-initiated macOS capture action; permission flow and end-to-end capture still need validation |
 | 47 | Paste image/text/link | Partial: images and plain text; URL-specific clickable objects next |
-| 48 | Capture tray | Built: persistent per-library image tray; add files, paste, capture and click to place. Up to eight references within 64 MiB of compressed data; direct tray dragging and thumbnails remain next |
+| 48 | Capture tray | Built: persistent per-library tray; add files, paste, capture, place and undo removal. Eight active and eight removed entries share 64 MiB; explicit emptying frees removed entries. Direct dragging and thumbnails remain next |
 | 49 | Repeat capture area | Next |
 | 50 | Crop/resize images | Built: reversible bitmap cropping, restore full image and proportional resizing; LaTeX/TikZ vector objects are excluded from cropping |
 | 51 | Attach ink to screenshot | Partial: ink starting on an image follows movement and proportional resizing; explicit attachment next |
-| 52 | Lock reference | Built: menu action locks selected images against movement |
+| 52 | Lock reference | Built: selected locked images and attached ink resist movement, selection deletion and Clear Ink; deliberate annotation/eraser still work |
 | 53 | Side-by-side arrangement | Partial: manual positioning; automatic alignment next |
 | 54 | Duplicate reference/annotations | Built: duplicate a selection or make a fresh copy without annotations |
 | 55 | Floating reference | Next |
@@ -72,7 +72,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 66 | Pen presets | Partial: four colours and a pen-width control, remembered between launches; named custom presets next |
 | 67 | Named board locations | Next |
 | 68 | Purposeful animations | Next: no idle animations in current build |
-| 69 | Appearance controls | Partial: paper/dim/transparent with dots on paper; dark palette/preferences next |
+| 69 | Appearance controls | Partial: paper/dim/transparent with dots; native controls follow system light/dark appearance. Custom board palettes/preferences next |
 | 70 | Portable preferences | Next |
 | 71 | Sticky notes/checklists | Partial: typed text; dedicated note/checkbox objects next |
 | 72 | Graph axes/grids | Partial: visual dot grid; reusable axes next |
@@ -86,7 +86,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 80 | PNG/PDF export | Built: whole-content or selected-content PNG/PDF, rendered from source assets; PNG output has a pixel limit |
 | 81 | Ink + transcription export | Next |
 | 82 | Drag/copy finished work out | Partial: file export and copying a selected region as PNG; outbound drag next |
-| 83 | Export preview | Partial: clean content export uses paper; separate workspace preview includes controls but no desktop; interactive export preview/options next |
+| 83 | Export preview | Partial: clean PNG/PDF export uses paper; HTML adds readable notes, descriptions and TeX source. Workspace preview includes controls but no desktop; interactive preview/options next |
 | 84 | Local, no account | Built: no network calls or cloud recognition |
 
 ## Next engineering work
@@ -108,6 +108,6 @@ Do not enable all future features as background workers. Each addition must spec
 - [x] Render only on explicit request; no idle typesetting process.
 - [ ] Handwriting-to-LaTeX recognition remains separate future work.
 
-- [x] Detailed heat, wave and Poisson examples with pre-rendered vectors and editable source, available without TeX.
+- [x] GitHub-only heat, wave and Poisson examples with pre-rendered vectors and editable source, available without TeX. These are optional sample downloads, excluded from the installed app.
 
 See [worked PDE models](PDE-MODELS.md) and [LaTeX and TikZ](MATHS.md) for supported input and local TeX requirements.

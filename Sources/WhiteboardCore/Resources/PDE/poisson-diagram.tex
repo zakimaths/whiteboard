@@ -4,6 +4,7 @@
   \pgfmathsetmacro{\shade}{100*sin(180*(\i+0.5)/24)*sin(180*(\j+0.5)/24)}
   \fill[field!\shade!white] ({\i/6},{\j/6}) rectangle ({(\i+1)/6},{(\j+1)/6});
 }}
+\draw[white,line width=4pt] (0,0) rectangle (4,4);
 \draw[black!70,thick] (0,0) rectangle (4,4);
 \draw[->] (0,0)--(4.5,0) node[right] {$x$};
 \draw[->] (0,0)--(0,4.5) node[above] {$y$};

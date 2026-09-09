@@ -3,6 +3,8 @@
 Date: 9 September 2026  
 Reviewed release: Whiteboard 0.6.0 (`e945456`)
 
+**Follow-up:** [0.7 fixes and dispositions](AUDIT-RESOLUTION.md). This document preserves the original review hypotheses. Native event testing disproved the panning claim: the original document anchor already stayed fixed throughout a drag. Other findings include both confirmed defects and feature suggestions; the follow-up distinguishes them.
+
 Five independent reviewers examined the product from these perspectives:
 
 1. STEM student using boards for problems, equations and revision.

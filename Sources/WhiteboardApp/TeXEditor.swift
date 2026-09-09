@@ -22,6 +22,21 @@ enum TeXEditor {
         return alert.runModal() == .alertFirstButtonReturn ? TeXSource(kind:kind,code:editor.string) : nil
     }
     static func sample(_ kind: TeXKind) -> String {
-        return (try? PDEExamples.source(kind == .latex ? "heat-model" : "heat-diagram",kind:kind).code) ?? #"u_t=\kappa u_{xx}"#
+        if kind == .latex {
+            return #"""
+\begin{aligned}
+f(x)&=x^2-4x+3,\\
+f(x)&=(x-1)(x-3)
+\end{aligned}
+"""#
+        }
+        return #"""
+\begin{tikzpicture}[>=Stealth]
+\draw[->] (-0.2,0)--(4.4,0) node[right] {$x$};
+\draw[->] (0,-0.2)--(0,3.2) node[above] {$y$};
+\draw[blue,very thick] (0.4,0.7) -- (2,2.5) -- (3.7,0.8);
+\fill[blue] (2,2.5) circle (2pt) node[above] {idea};
+\end{tikzpicture}
+"""#
     }
 }

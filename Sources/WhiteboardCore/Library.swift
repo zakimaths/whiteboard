@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 public enum IdeaStatus: String, CaseIterable { case unfinished = "Unfinished", finished = "Finished", archived = "Archive" }
 
@@ -20,7 +21,7 @@ public struct RecoverySnapshot: Equatable {
 public final class Library {
     public let root: URL
     private let fm = FileManager.default
-    private var knownVersions: [URL: Date] = [:]
+    private var knownVersions: [URL: MetadataVersion] = [:]
     private let write: (Data,URL) throws -> Void
     private let now: () -> Date
     private var nextSnapshot: [URL: Date] = [:]
@@ -70,30 +71,48 @@ public final class Library {
         }
         return result.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
-    private func stamp(_ url: URL) throws -> Date {
-        guard fm.fileExists(atPath: url.path) else { throw BoardError.missingFile }
-        // URL resource values can cache a pre-replacement modification date.
-        // Read fresh file attributes after every atomic replacement.
-        return try fm.attributesOfItem(atPath: url.path)[.modificationDate] as? Date ?? .distantPast
+    private struct MetadataVersion: Equatable {
+        let bytes: Int
+        let digest: Digest256
+    }
+    private func metadata(_ url: URL) throws -> (Data,MetadataVersion) {
+        guard fm.fileExists(atPath:url.path) else { throw BoardError.missingFile }
+        let data = try readMetadata(url)
+        return (data,MetadataVersion(bytes:data.count,digest:Digest256(data)))
+    }
+    private func encode(_ board: Board) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(board)
     }
     public func load(_ url: URL) throws -> Board {
         let file = url.appendingPathComponent("board.json")
-        let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        guard size < 64 * 1024 * 1024 else { throw BoardError.invalidData }
-        let result = try JSONDecoder().decode(Board.self, from: Data(contentsOf: file)).validated()
-        knownVersions[url] = try stamp(file)
+        let (data,version) = try metadata(file)
+        let result = try JSONDecoder().decode(Board.self, from:data).validated()
+        knownVersions[url] = version
         return result
     }
     public func save(_ board: Board, at url: URL, checkingVersion: Bool = true) throws {
         _ = try board.validated()
         let file = url.appendingPathComponent("board.json")
         guard fm.fileExists(atPath: url.path) else { throw BoardError.missingFile }
-        if checkingVersion, let known = knownVersions[url], try stamp(file) != known { throw BoardError.conflict }
-        let data = try JSONEncoder().encode(board)
+        let existing: Data?
+        if fm.fileExists(atPath:file.path) {
+            let value = try metadata(file)
+            if checkingVersion, let known = knownVersions[url], value.1 != known { throw BoardError.conflict }
+            existing = value.0
+        } else {
+            if checkingVersion { throw BoardError.missingFile }
+            existing = nil
+        }
+        let data = try encode(board)
         guard data.count < 64*1024*1024 else { throw BoardError.invalidData }
+        if let existing, data == existing {
+            knownVersions[url] = MetadataVersion(bytes:data.count,digest:Digest256(data))
+            return
+        }
         // Keep one recoverable previous version. Never move away the current valid file.
-        if fm.fileExists(atPath: file.path) {
-            let previous = try readMetadata(file)
+        if let previous = existing {
             if nextSnapshot[url] == nil {
                 nextSnapshot[url] = try history(url).first.map {$0.date.addingTimeInterval(300)} ?? .distantPast
             }
@@ -104,7 +123,7 @@ public final class Library {
             try write(previous,url.appendingPathComponent("previous.json"))
         }
         try write(data,file)
-        knownVersions[url] = try stamp(file)
+        knownVersions[url] = MetadataVersion(bytes:data.count,digest:Digest256(data))
     }
     private func readMetadata(_ file: URL) throws -> Data {
         let values = try file.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey,.isSymbolicLinkKey])
@@ -149,8 +168,8 @@ public final class Library {
     }
     public func checkpoint(_ url: URL) throws {
         let file = url.appendingPathComponent("board.json")
-        if let known = knownVersions[url], try stamp(file) != known { throw BoardError.conflict }
-        let data = try readMetadata(file)
+        let (data,version) = try metadata(file)
+        if let known = knownVersions[url], version != known { throw BoardError.conflict }
         _ = try JSONDecoder().decode(Board.self,from:data).validated()
         try storeSnapshot(data,at:url)
     }
@@ -198,5 +217,77 @@ public final class Library {
         let name = UUID().uuidString + "." + (["png", "jpg", "jpeg", "heic", "tiff", "gif", "pdf"].contains(ext.lowercased()) ? ext.lowercased() : "png")
         try write(data,url.appendingPathComponent("assets").appendingPathComponent(name))
         return name
+    }
+
+    /// Imports a related set as one operation. A later failure removes only files
+    /// created by this call, leaving prior board assets untouched.
+    public func importAssets(_ assets: [(data: Data, extension: String)], to url: URL) throws -> [String] {
+        var created: [String] = []
+        do {
+            for asset in assets { created.append(try importAsset(data:asset.data,extension:asset.extension,to:url)) }
+            return created
+        } catch {
+            discardAssets(created,at:url)
+            throw error
+        }
+    }
+
+    /// Removes exact, known orphan results. Unsafe names and symlinks are ignored.
+    public func discardAssets(_ names: [String], at url: URL) {
+        let folder = url.appendingPathComponent("assets",isDirectory:true)
+        for name in Set(names) where Self.isSafeAssetName(name) {
+            let file = folder.appendingPathComponent(name)
+            guard let values = try? file.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey]),
+                  values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+            try? fm.removeItem(at:file)
+        }
+    }
+
+    /// Previews what explicit compaction would remove without changing files.
+    public func unusedAssets(at url: URL, retaining undoAssets: Set<String> = []) throws -> [String] {
+        let assetsFolder = url.appendingPathComponent("assets",isDirectory:true)
+        let values = try assetsFolder.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true,
+              undoAssets.allSatisfy({Self.isSafeAssetName($0)}) else { throw BoardError.invalidData }
+        var retained = undoAssets
+        func retain(from file: URL) throws {
+            guard fm.fileExists(atPath:file.path) else { return }
+            let board = try JSONDecoder().decode(Board.self,from:readMetadata(file)).validated()
+            retained.formUnion(board.images.flatMap {[$0.asset] + ($0.vectorAsset.map {[$0]} ?? [])})
+        }
+        try retain(from:url.appendingPathComponent("board.json"))
+        try retain(from:url.appendingPathComponent("previous.json"))
+        for snapshot in try history(url) { try retain(from:try historyFolder(url).appendingPathComponent(snapshot.filename)) }
+
+        var unused: [String] = []
+        for file in try fm.contentsOfDirectory(at:assetsFolder,includingPropertiesForKeys:[.isRegularFileKey,.isSymbolicLinkKey],options:[.skipsHiddenFiles]) {
+            let name = file.lastPathComponent
+            let item = try file.resourceValues(forKeys:[.isRegularFileKey,.isSymbolicLinkKey])
+            guard item.isRegularFile == true, item.isSymbolicLink != true, Self.isSafeAssetName(name) else { continue }
+            guard UUID(uuidString:file.deletingPathExtension().lastPathComponent) != nil,
+                  ["png","jpg","jpeg","heic","tiff","gif","pdf"].contains(file.pathExtension.lowercased()) else { continue }
+            if !retained.contains(name) { unused.append(name) }
+        }
+        return unused.sorted()
+    }
+
+    /// Explicit maintenance only. Retains every asset referenced by current,
+    /// previous and recovery metadata, plus assets held by the caller's undo stack.
+    @discardableResult public func compactAssets(at url: URL, retaining undoAssets: Set<String> = []) throws -> [String] {
+        let unused = try unusedAssets(at:url,retaining:undoAssets)
+        let folder = url.appendingPathComponent("assets",isDirectory:true)
+        for name in unused { try fm.removeItem(at:folder.appendingPathComponent(name)) }
+        return unused
+    }
+
+    private static func isSafeAssetName(_ name: String) -> Bool {
+        !name.isEmpty && name == URL(fileURLWithPath:name).lastPathComponent && !name.contains("..")
+    }
+}
+
+private struct Digest256: Equatable {
+    private let bytes: [UInt8]
+    init(_ data: Data) {
+        bytes = Array(SHA256.hash(data:data))
     }
 }

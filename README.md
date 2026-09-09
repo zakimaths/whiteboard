@@ -4,21 +4,21 @@ A quiet macOS canvas for sudden ideas, screenshots and working things out.
 
 Write over your desktop. Keep unfinished thoughts on a small filename shelf. Come back when they are useful. Add editable LaTeX equations and TikZ diagrams when a thought needs more precision.
 
-![Worked heat-diffusion model exported by Whiteboard](docs/demos/pde-heat.png)
+![A general-purpose idea board exported by Whiteboard](docs/demos/an-idea-before-it-disappears.png)
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.6.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
-- Immediate drawing and typing on a transparent, dimmed or paper board.
+- Immediate drawing and multiline typing on a transparent, dimmed or paper board.
 - Scroll for more room, pan, pinch to zoom, or fit all content.
 - Automatic shapes: sketch a line, arrow, box, circle or ellipse with the pen and it snaps when you lift. Undo restores your original ink. Recognition stays local and runs only at pen-up.
 - Explicit shape tools are also available, with Shift constraints and the same undo/save/export behaviour as ink.
 - Drop or paste screenshots; select, crop, restore, move, resize and annotate them. Attached ink follows movement and resizing.
 - A capture tray for collecting image files, pasted images and screenshots before placing copies on boards. References persist separately for each library.
-- Detailed heat, wave and Poisson examples with editable LaTeX equations, vector TikZ diagrams, boundary conditions and solution checks.
+- Keyboard navigation and movement of board objects, VoiceOver object labels, author-supplied image descriptions and HTML exports with a readable transcript.
 - A collapsible top shelf whose buttons read real filenames. Red is unfinished, green is finished; labels and symbols accompany the colours.
 - Pin important ideas and move them earlier or later on the shelf. Preferences stay separate for each library.
 - Local autosave, save/reopen, copies, archive, manual checkpoints and dated recovery history, restored as separate files.
@@ -32,7 +32,7 @@ This is a working preview, not the complete 84-feature product. Thumbnail cards,
 
 Unzip the download and open **Whiteboard.app**. A pencil icon appears in the macOS menu bar. The preview is ad-hoc signed, **not notarised by Apple**; macOS may require an explicit allowance in Privacy & Security for a downloaded copy. Building locally is also supported.
 
-Click **Demo** on the shelf, or choose **File → Open demo workspace**. Six editable examples open in a separate demo library. Click **My ideas** to return to your previous board. Demo edits persist; reopening the demo does not create duplicate samples. Existing demo libraries gain the three PDE examples once, retaining earlier boards. No account or TeX installation is needed for these six examples.
+Click **Demo** on the shelf, or choose **File → Open demo workspace**. Three general-purpose examples open in a separate demo library: capture a thought, connect ideas and keep what worked. Click **My ideas** to return to your previous board. Demo edits persist without duplicates. No account or TeX installation is needed. PDE examples are exclusively optional GitHub demo materials; they are not bundled or automatically added to the app. Earlier demo libraries remain saved.
 
 To look around without installing anything, [view the public demos](docs/DEMOS.md). Distribution is through GitHub; there is no App Store listing.
 
@@ -50,6 +50,9 @@ To look around without installing anything, [view the public demos](docs/DEMOS.m
 | Zoom | Pinch, Command-scroll, or + / − |
 | Fit everything / reset view | Command–1 / Command–0 |
 | Rename / new idea | Return / Command–N |
+| Navigate / move objects | Tab / Shift–Tab, then arrow keys; Shift moves farther |
+| Edit selected text or maths | Return; Command–Return commits multiline text |
+| Describe an image | Edit → Image description |
 | Import screenshot | Drop, paste, or File → Import image |
 | Collect references | Tray icon or File → Capture tray; Add files, Paste or Capture |
 | Capture screenshot | Camera button; macOS permission may be required |
@@ -82,7 +85,7 @@ Each `.whiteboard` directory holds editable `board.json`, one `previous.json` re
 
 History retains up to 20 snapshots within a 64 MiB metadata budget. Automatic snapshots are spaced five minutes apart during edits; manual checkpoints are available at any time. [Recovery behaviour and limits](docs/RECOVERY.md).
 
-**Saved locally** appears after a successful write. Save failures keep the in-memory work and offer a copy workflow. Saves commit completed gestures; an in-flight stroke commits on release, hide or quit. Keep backups of important work while using the preview.
+**Saved locally** appears after a successful write. Temporary save errors get two bounded retries and a **File → Retry saving** action. External changes block overwrite and offer the copy workflow. Saves commit completed gestures; an in-flight stroke commits on release, hide or quit. Keep backups of important work while using the preview.
 
 ### LaTeX and TikZ
 
@@ -100,6 +103,7 @@ Requires macOS and Apple’s Swift command-line tools. The deployment target is 
 
 ```sh
 bash scripts/check.sh
+bash scripts/check_native.sh
 bash scripts/build.sh
 ```
 

@@ -279,7 +279,8 @@ check("Fictional demo assets export and remain independent of a personal library
         let idea = try personal.create(name:"Personal thought"), before = try Data(contentsOf:idea.appendingPathComponent("board.json"))
         try temporaryLibrary { demo in
             _ = try DemoContent.populate(demo)
-            let samples = try demo.list(); try expect(samples.count == 6)
+            let samples = try demo.list(); try expect(samples.count == 3)
+            try expect(try samples.allSatisfy { try demo.load($0.url).images.allSatisfy {$0.tex == nil} })
             try expect(samples.contains {$0.status == .finished})
             for item in samples {
                 var board = try demo.load(item.url)
@@ -459,7 +460,7 @@ check("Automatic history is spaced across saves and restarts and moves with the 
         try expect(try library.history(url).count == 1)
         let reopened = try Library(root:initial.root,now:{clock}); _ = try reopened.load(url)
         try reopened.save(board,at:url); try expect(try reopened.history(url).count == 1)
-        clock = clock.addingTimeInterval(300); try reopened.save(board,at:url)
+        clock = clock.addingTimeInterval(300); board.texts[0].text = "Edit after five minutes"; try reopened.save(board,at:url)
         let snapshots = try reopened.history(url); try expect(snapshots.count == 2)
         let moved = try reopened.move(url,to:.finished,name:"Kept thought")
         try expect(try reopened.history(moved) == snapshots)
@@ -594,6 +595,7 @@ check("Capture tray enforces item, file and total byte limits without evicting r
         try rejects {_ = try tray.add(png,extension:"png",title:"Overflow")}
         try expect(try tray.references() == before)
         for item in before { try tray.remove(item.id) }
+        try expect(try tray.emptyRemoved() == 8)
         var large = png; large.append(Data(repeating:0,count:CaptureTray.imageByteLimit-png.count))
         try tray.add(large,extension:"png",title:"Large one"); try tray.add(large,extension:"png",title:"Large two")
         try rejects {_ = try tray.add(png,extension:"png",title:"Byte overflow")}
@@ -675,5 +677,34 @@ if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
         try rejects { _ = try TeXCompiler.compile(TeXSource(kind:.latex,code:"\\input{"+file.path+"}")) }
     }
 } else { print("NOTE LaTeX/TikZ integration checks require WHITEBOARD_TEX_CHECKS=1 and local TeX packages.") }
+runAuditStorageChecks()
+check("Restoring a tray removal cannot exceed active capacity") {
+    try temporaryLibrary { library in
+        let tray = CaptureTray(libraryRoot:library.root), png = try trayPNG()
+        let removed = try tray.remove(tray.add(png,extension:"png",title:"Removed").id)
+        for index in 0..<8 { try tray.add(png,extension:"png",title:"Active \(index)") }
+        try rejects { try tray.restore(removed) }
+        try expect(try tray.references().count == 8)
+    }
+}
+check("General demos preserve edits, resume partial installation and restore copies explicitly") {
+    try temporaryLibrary { library in
+        _ = try DemoContent.populate(library)
+        let first = try library.list()[0], renamed = try library.move(first.url,to:.unfinished,name:"My renamed example")
+        var board = try library.load(renamed); board.texts.append(BoardText(text:"My addition",origin:Point(20,20))); try library.save(board,at:renamed)
+        _ = try DemoContent.populate(library); try expect(try library.list().count == 3); try expect(try library.load(renamed) == board)
+        _ = try DemoContent.populate(library,restore:true); try expect(try library.list().count == 6)
+        try expect(try library.load(renamed) == board)
+    }
+}
+check("Identical saves do not write current, previous or history metadata") {
+    try temporaryLibrary { initial in
+        var writes = 0
+        let library = try Library(root:initial.root,atomicWrite:{data,url in writes += 1; try data.write(to:url,options:.atomic)})
+        let board = Board(), package = try library.create(board:board), before = writes
+        try library.save(board,at:package); try library.save(board,at:package)
+        try expect(writes == before && (try library.history(package)).isEmpty)
+    }
+}
 print("\n\(passed) passed, \(failed) failed")
 exit(failed == 0 ? 0 : 1)

@@ -20,7 +20,7 @@ def heat(x, t):
 def heat_dx(x,t):
     return amplitude * sum(b*(n*pi/length)*math.exp(-kappa*(n*pi/length)**2*t)*math.cos(n*pi*x/length) for n,b in [(1,1),(3,0.35)])
 
-for t in [0,0.04,0.2]:
+for t in [0.03,0.04,0.2]:
     close(heat(0,t),0); close(heat(length,t),0)
     for fraction in [0.17,0.36,0.71]:
         x, h, dt = length*fraction, 1e-4, 1e-5
@@ -38,7 +38,7 @@ speed=1.3
 wave=lambda x,t:amplitude*math.cos(pi*speed*t/length)*math.sin(pi*x/length)
 wave_dt=lambda x,t:-amplitude*pi*speed/length*math.sin(pi*speed*t/length)*math.sin(pi*x/length)
 wave_dx=lambda x,t:amplitude*pi/length*math.cos(pi*speed*t/length)*math.cos(pi*x/length)
-for t in [0,0.17,0.61]:
+for t in [0.03,0.17,0.61]:
     close(wave(0,t),0); close(wave(length,t),0)
     for fraction in [0.17,0.36,0.71]:
         x,h=length*fraction,1e-4
@@ -54,10 +54,38 @@ poisson=lambda x,y:math.sin(pi*x)*math.sin(pi*y)
 for z in [0.13,0.5,0.83]:
     for x,y in [(0,z),(1,z),(z,0),(z,1)]: close(poisson(x,y),0)
 close(poisson(0.5,0.5),1)
-errors=[]
+truncation_errors=[]
 for n in [8,16,32]:
     h=1/n
-    errors.append(max(abs((4*poisson(i*h,j*h)-poisson((i-1)*h,j*h)-poisson((i+1)*h,j*h)-poisson(i*h,(j-1)*h)-poisson(i*h,(j+1)*h))/h**2-2*pi**2*poisson(i*h,j*h)) for i in range(1,n) for j in range(1,n)))
-assert all(3.9 < a/b < 4.1 for a,b in zip(errors,errors[1:])), errors
+    truncation_errors.append(max(abs((4*poisson(i*h,j*h)-poisson((i-1)*h,j*h)-poisson((i+1)*h,j*h)-poisson(i*h,(j-1)*h)-poisson(i*h,(j+1)*h))/h**2-2*pi**2*poisson(i*h,j*h)) for i in range(1,n) for j in range(1,n)))
+assert all(3.9 < a/b < 4.1 for a,b in zip(truncation_errors,truncation_errors[1:])), truncation_errors
+
+def poisson_grid_error(n):
+    """Solve the interior five-point system with conjugate gradients."""
+    h, side = 1/n, n-1
+    def apply(values):
+        result=[0.0]*(side*side)
+        for j in range(side):
+            for i in range(side):
+                k=j*side+i
+                neighbours=(values[k-1] if i else 0.0)+(values[k+1] if i+1<side else 0.0)
+                neighbours+=(values[k-side] if j else 0.0)+(values[k+side] if j+1<side else 0.0)
+                result[k]=(4*values[k]-neighbours)/h**2
+        return result
+    rhs=[2*pi**2*poisson((i+1)*h,(j+1)*h) for j in range(side) for i in range(side)]
+    solution=[0.0]*len(rhs); residual=rhs[:]; direction=residual[:]
+    rr=sum(value*value for value in residual)
+    for _ in range(4*len(rhs)):
+        product=apply(direction)
+        alpha=rr/sum(a*b for a,b in zip(direction,product))
+        solution=[u+alpha*p for u,p in zip(solution,direction)]
+        residual=[r-alpha*a for r,a in zip(residual,product)]
+        next_rr=sum(value*value for value in residual)
+        if next_rr < 1e-24: break
+        beta=next_rr/rr; direction=[r+beta*p for r,p in zip(residual,direction)]; rr=next_rr
+    return max(abs(solution[j*side+i]-poisson((i+1)*h,(j+1)*h)) for j in range(side) for i in range(side))
+
+solution_errors=[poisson_grid_error(n) for n in [8,16,32]]
+assert all(3.8 < a/b < 4.2 for a,b in zip(solution_errors,solution_errors[1:])), solution_errors
 close(2*pi**2*integrate(lambda x:math.sin(pi*x)**2)**2,pi**2/2)
-print('PASS Poisson boundary values, central maximum, energy integral and second-order stencil residual')
+print('PASS Poisson boundary values, energy, second-order truncation and solved-grid convergence')

@@ -17,6 +17,8 @@ jobs:
           persist-credentials: false
       - name: Check document behaviour
         run: bash scripts/check.sh
+      - name: Check native interactions and failure recovery
+        run: bash scripts/check_native.sh
       - name: Check PDE model identities
         run: python3 scripts/check_pde_models.py
       - name: Build the native app
@@ -24,6 +26,7 @@ jobs:
       - name: Verify signature and package
         run: |
           codesign --verify --deep --strict build/Whiteboard.app
+          test ! -d build/Whiteboard.app/Contents/Resources/PDE
           ditto -c -k --norsrc --keepParent build/Whiteboard.app build/Whiteboard-macOS.zip
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

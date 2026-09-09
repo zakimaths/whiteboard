@@ -2,32 +2,31 @@
 
 Ready-to-use public materials:
 
-- [Heat diffusion](demos/pde-heat.png), [wave motion](demos/pde-wave.png) and [Poisson field](demos/pde-poisson.png): original detailed PDE boards with typeset equations and diagrams.
-- [Capture tray](demos/tray-workspace.png): actual app preview using the heat-equation reference.
-- [Repository](https://github.com/zakimaths/whiteboard) and [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.6.0).
+- [Everyday idea board](demos/an-idea-before-it-disappears.png): the app's general-purpose starting point.
+- [Heat diffusion](demos/pde-heat.png), [wave motion](demos/pde-wave.png) and [Poisson field](demos/pde-poisson.png): optional GitHub showcase boards with typeset equations and diagrams.
+- [Repository](https://github.com/zakimaths/whiteboard), [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.0) and [demo walkthrough](DEMOS.md).
 
 The repository excludes personal libraries, the original user screenshot, earlier conversation-specific reports, development caches and diagnostic logs. Demo media includes sample content only. The release and checklist identify implemented features and outstanding work explicitly.
 
 ## X draft
 
-I’m building Whiteboard: a quiet Mac canvas for ideas and academic working.
+I’m building Whiteboard: a quiet Mac canvas for sudden ideas, screenshots and working things out.
 
-Now with a capture tray, recovery checkpoints, and detailed heat, wave and Poisson models using editable LaTeX + TikZ.
+Local autosave, a shelf of ideas, automatic shapes, LaTeX + TikZ. General demos in the app; detailed maths examples on GitHub.
 
-Try the demo:
 https://github.com/zakimaths/whiteboard
 
 ## LinkedIn draft
 
 I wanted somewhere to catch an idea, collect a screenshot and work through a problem without losing the thread while switching apps.
 
-Whiteboard is my native macOS take on that: a desktop canvas, a shelf of real saved filenames, local autosave, automatic shapes and recovery checkpoints. The new capture tray collects references before placing copies on a board.
+Whiteboard is my native macOS take on that: a general-purpose desktop canvas, a shelf of real saved filenames, local autosave, automatic shapes and recovery checkpoints. A capture tray holds references until you're ready to place them.
 
-The academic examples now use detailed PDE models: heat diffusion, a fixed string and a Poisson field. Each includes boundary conditions, an exact solution, a numerical scheme and original vector diagrams. The LaTeX and TikZ sources remain editable. Saved examples open without installing TeX; these are worked models rather than an interactive PDE solver.
+This update focuses on product quality: stronger saving and image handling, recoverable tray removal, multiline notes, keyboard editing and readable HTML exports. The repository documents the checks and remaining limitations.
 
-I’m prioritising product quality and measured resource use. The repository includes the tests, mathematical consistency checks, optimisation notes and remaining limitations.
+The app opens with three everyday examples. Separately, the GitHub showcase includes detailed heat, wave and Poisson models with editable LaTeX and TikZ. Those examples demonstrate what the canvas can hold; they don't define what you have to use it for.
 
-Six editable examples are available through the Demo button, with a quick return to your own ideas. Public PNG/PDF previews are available without installing the app. It’s an early GitHub preview; there is no App Store listing.
+The Mac preview, editable demo packs and public image/PDF previews are available on GitHub. It's an early preview with no App Store listing.
 
 https://github.com/zakimaths/whiteboard
 

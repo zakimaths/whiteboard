@@ -1,3 +1,17 @@
+# Whiteboard 0.7.0 · an everyday canvas, with stronger foundations
+
+- The app's Demo button now opens three general-purpose boards. LaTeX and TikZ start with generic examples. Detailed PDE boards remain available in the separate GitHub sample pack; academic assets are excluded from the app bundle. Earlier demo libraries remain saved.
+- Fixes cover locked images and attached ink, oriented photos, external file changes, temporary save failures, exit during capture/export, image-preview upgrades and menu actions during busy work.
+- Capture-tray removal can be undone across restarts. Damaged entries are isolated, valid references remain usable and explicit emptying frees removed references.
+- Native multiline notes, keyboard object navigation/cropping, image descriptions and readable HTML exports improve editing and access. Shelf controls follow system appearance and preserve focus during updates.
+- Spatial indexing reduces repeated canvas scans. Undo has count and estimated-byte budgets, unchanged saves skip disk writes and large boards debounce saves more conservatively. Unused generated assets can be cleaned while retaining saved history and live undo.
+
+**65 local checks pass: 52 core, 3 real TeX and 10 native.** Three numerical PDE groups and regeneration of all twelve academic assets also pass. One audit claim about accelerating panning was disproved by native events and the correct behavior was retained. [Audit resolution](AUDIT-RESOLUTION.md), [validation and remaining manual checks](VALIDATION.md).
+
+Downloads include the Apple-silicon app, three general samples and a separate six-board GitHub sample pack. **GitHub preview; ad-hoc signed, not Apple-notarised.** [Demo access](DEMOS.md), [feature status](IMPLEMENTATION.md).
+
+---
+
 # Whiteboard 0.6.0 · collect references and work through PDEs
 
 - The capture tray keeps up to eight image references in the current ideas library. Add files, paste an image or use Capture, then click a filename to place an independent copy on a board. Tray entries persist across restarts; removing one leaves placed copies intact.

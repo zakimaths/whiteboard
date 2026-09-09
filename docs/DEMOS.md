@@ -1,14 +1,14 @@
 # Try Whiteboard
 
-**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.6.0/Whiteboard-0.6.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.6.0/Whiteboard-Sample-Ideas.zip)**
+[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-macOS-arm64.zip) · [General samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-General-Samples.zip) · [Optional GitHub academic samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-GitHub-Samples.zip)
 
-View the examples here without installing anything. On an Apple silicon Mac, open Whiteboard and click **Demo**. Six editable boards open in a separate local library; **My ideas** returns to your previous personal board. No account, trial expiry or TeX installation is needed to view and annotate the samples. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
+Whiteboard is a multi-use canvas for ideas, everyday notes, screenshots, explanations and academic work. Click **Demo** for three general examples: **An idea before it disappears**, **Give an idea some shape**, and **Keep what worked**. **My ideas** returns to your personal board. No account or TeX installation is needed. The app is an early preview and is not Apple-notarised; see [installation notes](../README.md#open-and-use).
 
-Demo edits persist in `~/Library/Application Support/Whiteboard/Demo Ideas`. Existing demo libraries receive the three PDE boards once, retaining earlier examples and edits. The app normally relaunches into the personal library; developers can use `--demo` to enter the demo directly.
+General demo edits persist in `~/Library/Application Support/Whiteboard/Everyday Demos`. Older demo libraries remain saved in their previous location. PDE examples are excluded from the installed app resources and default demo workspace; they are optional GitHub-only materials. The app normally relaunches into the personal library; developers can use `--demo` for general examples.
 
-## Detailed academic models
+## GitHub-only academic showcase
 
-Open **Heat diffusion — modes and decay**, **Wave motion — a fixed string**, or **Poisson — a field on the unit square**. Each contains a governing PDE, boundary/initial data, exact solution, energy or residual check, vector diagram and numerical scheme. Scroll to the lower sections, or use **Fit** and zoom into the part you want to study.
+View **Heat diffusion — modes and decay**, **Wave motion — a fixed string**, or **Poisson — a field on the unit square** below. Each contains a governing PDE, boundary/initial data, exact solution, energy or residual check, vector diagram and numerical scheme. To edit them optionally, download and unzip the GitHub academic samples and choose that folder through **File → Choose ideas folder**.
 
 ![Heat-diffusion working board](demos/pde-heat.png)
 
@@ -46,6 +46,6 @@ Control-click a shelf card to pin it or move it earlier/later. Try Finish and Re
 bash scripts/make_samples.sh
 ```
 
-This creates a fresh six-board library and PNG/PDF exports under `build`. It refuses to overwrite an existing sample library. The release's sample ZIP contains the same six generated boards, independent of personal and test-session libraries.
+This creates three general boards and PNG/PDF exports under `build`, refusing to overwrite an existing sample library. To explicitly include PDEs for GitHub materials, use `swift run WhiteboardSamples --pde "build/GitHub Samples" "build/GitHub Exports"`. The release supplies separate three-board general and six-board GitHub archives; both exclude personal and test-session libraries.
 
 All current maths previews use the PDE examples. They are exports from the app's document renderer; the capture-tray image is an actual running-app view export. Earlier-release media remains in the repository history and older releases. No surrounding desktop is captured in the workspace preview.

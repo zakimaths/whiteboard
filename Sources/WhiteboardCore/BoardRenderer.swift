@@ -7,13 +7,30 @@ import UniformTypeIdentifiers
 /// An export uses an immutable document snapshot and decodes one source image at a time.
 /// It never captures the desktop, controls, selection handles or preview placeholders.
 public enum BoardRenderer {
+    /// A visual preview plus an ordered, screen-reader-readable document transcript.
+    /// Equation source is preserved verbatim; descriptions are supplied by the author.
+    public static func html(_ board: Board, package: URL) throws -> String {
+        func escape(_ value: String) -> String {
+            value.replacingOccurrences(of:"&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;")
+        }
+        let preview = try png(board,package:package).base64EncodedString()
+        var sections: [(Double,Double,String)] = board.texts.map { ($0.origin.y,$0.origin.x,"<section><h2>Note</h2><p>"+escape($0.text)+"</p></section>") }
+        for image in board.images {
+            let description = image.accessibilityDescription ?? "Image without an author description"
+            let source = image.tex.map {"<details><summary>Editable "+escape($0.kind.rawValue)+" source</summary><pre>"+escape($0.code)+"</pre></details>"} ?? ""
+            sections.append((image.frame.y,image.frame.x,"<section><h2>"+(image.tex == nil ? "Image" : "Equation or diagram")+"</h2><p>"+escape(description)+"</p>"+source+"</section>"))
+        }
+        sections.sort { $0.0 == $1.0 ? $0.1 < $1.1 : $0.0 < $1.0 }
+        return """
+        <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Whiteboard export</title><style>body{max-width:72rem;margin:2rem auto;padding:0 1rem;font:1.1rem/1.6 system-ui;color:#243130;background:#faf9f6}img{max-width:100%;height:auto}p,pre{white-space:pre-wrap;overflow-wrap:anywhere}section{border-top:1px solid #ccc;padding:1rem 0}a{color:#145c9e}</style>
+        <main><h1>Whiteboard</h1><a href="#transcript">Skip visual preview</a><figure><img alt="Visual overview of the board; text and image descriptions follow." src="data:image/png;base64,\(preview)"></figure>
+        <h2 id="transcript">Board transcript</h2><p>\(board.ink.count) ink stroke(s). Handwriting has not been transcribed automatically.</p>
+        \(sections.map {$0.2}.joined(separator:"\n"))</main></html>
+        """
+    }
     public static func textBounds(_ text: BoardText) -> Rect {
-        let font = CTFontCreateWithName("Helvetica" as CFString, text.size, nil)
-        let attributes = [kCTFontAttributeName:font] as CFDictionary
-        let string = CFAttributedStringCreate(nil,text.text as CFString,attributes)!
-        let setter = CTFramesetterCreateWithAttributedString(string)
-        let size = CTFramesetterSuggestFrameSizeWithConstraints(setter,CFRange(location:0,length:0),nil,CGSize(width:100_000,height:100_000),nil)
-        return Rect(text.origin.x,text.origin.y,max(1,ceil(size.width)+8),max(text.size*1.5,ceil(size.height)+8))
+        text.layoutBounds
     }
     public static func contentBounds(_ board: Board, padding: Double = 32) -> Rect {
         let boxes = board.ink.map(\.bounds)+board.images.map(\.visibleFrame)+board.texts.map {textBounds($0)}
@@ -101,11 +118,11 @@ public enum BoardRenderer {
             let rect = textBounds(text); guard rect.intersects(region) else { continue }
             let font = CTFontCreateWithName("Helvetica" as CFString,text.size,nil)
             let attrs = [kCTFontAttributeName:font,kCTForegroundColorAttributeName:color("ink")] as CFDictionary
-            let string = CFAttributedStringCreate(nil,text.text as CFString,attrs)!
-            let setter = CTFramesetterCreateWithAttributedString(string)
-            let path = CGPath(rect:CGRect(x:0,y:0,width:rect.width,height:rect.height),transform:nil)
-            context.saveGState(); context.translateBy(x:rect.x,y:rect.y+rect.height); context.scaleBy(x:1,y:-1); context.textMatrix = .identity
-            CTFrameDraw(CTFramesetterCreateFrame(setter,CFRange(location:0,length:0),path,nil),context); context.restoreGState()
+            for (index,line) in text.lines.enumerated() {
+                let string = CFAttributedStringCreate(nil,line as CFString,attrs)!
+                context.saveGState(); context.translateBy(x:rect.x,y:rect.y+Double(index)*text.size*1.25+CTFontGetAscent(font)); context.scaleBy(x:1,y:-1); context.textMatrix = .identity
+                context.textPosition = .zero; CTLineDraw(CTLineCreateWithAttributedString(string),context); context.restoreGState()
+            }
         }
     }
 }

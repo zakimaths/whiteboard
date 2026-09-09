@@ -1,4 +1,5 @@
 import Foundation
+import CoreText
 
 public struct Point: Codable, Equatable {
     public var x: Double
@@ -60,6 +61,7 @@ public struct BoardImage: Codable, Equatable, Identifiable {
     public var locked: Bool = false
     public var tex: TeXSource?
     public var vectorAsset: String?
+    public var accessibilityDescription: String?
     /// Normalised source-image region, measured from its top-left. Original assets stay intact.
     public var crop: Rect?
     public init(asset: String, frame: Rect) { self.asset = asset; self.frame = frame }
@@ -75,6 +77,17 @@ public struct BoardText: Codable, Equatable, Identifiable {
     public var origin: Point
     public var size: Double = 22
     public init(text: String, origin: Point) { self.text = text; self.origin = origin }
+    public var lines: [String] { text.components(separatedBy: "\n") }
+    /// Shared sizing rules for canvas hit testing and document rendering.
+    public var layoutBounds: Rect {
+        let font = CTFontCreateWithName("Helvetica" as CFString,size,nil)
+        let widest = lines.map { line -> Double in
+            let attributes = [kCTFontAttributeName:font] as CFDictionary
+            let value = CFAttributedStringCreate(nil,line as CFString,attributes)!
+            return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(value),nil,nil,nil)
+        }.max() ?? 0
+        return Rect(origin.x,origin.y,max(80,ceil(widest)+8),max(size*1.5,Double(lines.count)*size*1.25+8))
+    }
 }
 
 public struct Viewport: Codable, Equatable {
@@ -101,6 +114,46 @@ public struct Board: Codable, Equatable {
     public var recognisedText: String = ""
     public init() {}
     public var isEmpty: Bool { ink.isEmpty && images.isEmpty && texts.isEmpty }
+    /// Conservative in-memory estimate used to bound interactive undo history.
+    public var estimatedMemoryCost: Int {
+        let points = ink.reduce(0) { $0 + $1.points.count * MemoryLayout<Point>.stride }
+        let objects = ink.count * 128 + images.count * 512 + texts.count * 128
+        let textBytes = texts.reduce(0) { $0 + $1.text.utf8.count }
+        let imageBytes = images.reduce(0) { partial, image in
+            partial + image.asset.utf8.count + (image.vectorAsset?.utf8.count ?? 0) + (image.tex?.code.utf8.count ?? 0)
+        }
+        let strings = textBytes + recognisedText.utf8.count + imageBytes
+        return max(1, points + objects + strings + 1024)
+    }
+    public var referencedAssets: Set<String> {
+        Set(images.flatMap { [$0.asset] + ($0.vectorAsset.map { [$0] } ?? []) })
+    }
+    public func hasMovableObjects(_ ids: Set<UUID>) -> Bool {
+        let lockedImages = Set(images.filter(\.locked).map(\.id))
+        return images.contains { ids.contains($0.id) && !$0.locked }
+            || ink.contains { ids.contains($0.id) && !lockedImages.contains($0.imageID ?? UUID()) }
+            || texts.contains { ids.contains($0.id) }
+    }
+    @discardableResult public mutating func moveObjects(_ ids: Set<UUID>, by delta: Point) -> Bool {
+        guard delta.x.isFinite, delta.y.isFinite, delta.x != 0 || delta.y != 0, hasMovableObjects(ids) else { return false }
+        let lockedImages = Set(images.filter(\.locked).map(\.id))
+        let movingImages = Set(images.filter {ids.contains($0.id) && !$0.locked}.map(\.id))
+        for id in movingImages { moveImage(id:id,by:delta) }
+        for i in ink.indices where ids.contains(ink[i].id) && !movingImages.contains(ink[i].imageID ?? UUID()) && !lockedImages.contains(ink[i].imageID ?? UUID()) {
+            ink[i].points = ink[i].points.map {Point($0.x+delta.x,$0.y+delta.y)}
+        }
+        for i in texts.indices where ids.contains(texts[i].id) { texts[i].origin = Point(texts[i].origin.x+delta.x,texts[i].origin.y+delta.y) }
+        return true
+    }
+    @discardableResult public mutating func deleteObjects(_ ids: Set<UUID>) -> Bool {
+        let lockedImages = Set(images.filter(\.locked).map(\.id))
+        let removedImages = Set(images.filter {ids.contains($0.id) && !$0.locked}.map(\.id))
+        let removedInk = Set(ink.filter { (ids.contains($0.id) && !lockedImages.contains($0.imageID ?? UUID())) || ($0.imageID.map {removedImages.contains($0)} ?? false) }.map(\.id))
+        let removedText = Set(texts.filter {ids.contains($0.id)}.map(\.id))
+        guard !removedImages.isEmpty || !removedInk.isEmpty || !removedText.isEmpty else { return false }
+        ink.removeAll {removedInk.contains($0.id)}; images.removeAll {removedImages.contains($0.id)}; texts.removeAll {removedText.contains($0.id)}
+        return true
+    }
     public mutating func moveImage(id: UUID, by delta: Point) {
         guard let i = images.firstIndex(where: { $0.id == id }), !images[i].locked else { return }
         images[i].frame.x += delta.x; images[i].frame.y += delta.y
@@ -185,6 +238,7 @@ public struct Board: Codable, Equatable {
                 guard asset == URL(fileURLWithPath:asset).lastPathComponent, !asset.contains(".."), !asset.isEmpty else { throw BoardError.invalidData }
             }
             if let tex = image.tex { guard tex.code.utf8.count <= 64*1024 else { throw BoardError.invalidData } }
+            if let description = image.accessibilityDescription { guard description.utf8.count <= 2_000 else { throw BoardError.invalidData } }
             if let crop = image.crop {
                 guard version >= 2, image.vectorAsset == nil, [crop.x,crop.y,crop.width,crop.height].allSatisfy({$0.isFinite}),
                       crop.x >= 0, crop.y >= 0, crop.width > 0, crop.height > 0,

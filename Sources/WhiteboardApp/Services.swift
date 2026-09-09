@@ -37,7 +37,7 @@ final class ImagePool {
     func prepare(visible urls: [URL]) {
         let next = Set(urls.prefix(PreviewBudget.maximumVisibleImages).map(\.path))
         let pixels = PreviewBudget.maxPixelSize(visibleCount: next.count)
-        if pixels < maxPixelSize { clear() }
+        if pixels != maxPixelSize { clear() }
         maxPixelSize = pixels
         cache = cache.filter { next.contains($0.key) }
         failed.formIntersection(next)
@@ -75,12 +75,8 @@ final class ImagePool {
         return nil
     }
     static func dimensions(_ data: Data) -> NSSize? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Double,
-              let height = properties[kCGImagePropertyPixelHeight] as? Double,
-              width > 0, height > 0, width*height <= 100_000_000 else { return nil }
-        return NSSize(width: width, height: height)
+        guard let metadata = try? ImageMetadata.inspect(data) else { return nil }
+        return NSSize(width:metadata.width,height:metadata.height)
     }
 }
 

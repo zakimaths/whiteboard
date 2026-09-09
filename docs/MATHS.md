@@ -14,7 +14,7 @@ Editing and rendering a duplicated item creates new assets; the original item st
 
 LaTeX accepts a maths fragment; surrounding `$…$`, `$$…$$`, `\(…\)` or `\[…\]` delimiters are optional.
 
-The default LaTeX fragment is the heat-diffusion initial-boundary value problem:
+The app starts with a simple editable equation and a generic TikZ sketch. More detailed PDEs are available only in the GitHub demo materials. For example, the heat-diffusion initial-boundary value problem is:
 
 ```latex
 \begin{aligned}
@@ -29,9 +29,9 @@ v_\tau&=v_{\xi\xi}, &&0<\xi<1.
 \end{aligned}
 ```
 
-The default TikZ example plots its exact modal solution at three dimensionless times. [Editable TikZ source](../Sources/WhiteboardCore/Resources/PDE/heat-diagram.tex). TikZ accepts a `tikzpicture` or its inner drawing commands.
+The GitHub heat diagram plots its exact modal solution at three dimensionless times. [Editable TikZ source](../Sources/WhiteboardCore/Resources/PDE/heat-diagram.tex). TikZ accepts a `tikzpicture` or its inner drawing commands.
 
-The six demo boards include three detailed PDE models: heat diffusion, wave motion and a Poisson field. Every model includes conditions, a closed-form solution, a labelled diagram and a numerical scheme. [Full models, figures, source and checks](PDE-MODELS.md).
+The optional six-board GitHub download includes three PDE models: heat diffusion, wave motion and a Poisson field. Every model includes conditions, a closed-form solution, a labelled diagram and a numerical scheme. The in-app Demo contains only three everyday examples. [Full models, figures, source and checks](PDE-MODELS.md).
 
 The wrapper provides `amsmath`, `amssymb`, and, for TikZ, `arrows.meta`, `calc`, `positioning`, `shapes.geometric` and `decorations.pathreplacing`. This is an editor for individual equations and diagrams, not a full LaTeX document editor. Handwritten equation recognition is a separate planned feature.
 
@@ -39,7 +39,7 @@ The wrapper provides `amsmath`, `amssymb`, and, for TikZ, `arrows.meta`, `calc`,
 
 Creating or editing a render requires local `pdflatex` with the `standalone`, `amsmath`, `amssymb` and `tikz` packages. MacTeX's standard `/Library/TeX/texbin/pdflatex` location is detected; `/opt/homebrew/bin/pdflatex` and `/usr/local/bin/pdflatex` are also checked. No TeX distribution is bundled or automatically downloaded. Saved boards remain viewable without TeX.
 
-Only one render runs at a time, on a utility queue separate from saving and drawing. The child exits after rendering. Source is limited to 64 KB; the preview is capped at 8 million pixels and a 4096-pixel long edge. Compilation has CPU, output-file and wall-time limits. There is no live recompilation on each keystroke and no resident TeX service.
+Only one render runs at a time, on a utility queue separate from saving and drawing. Board editing pauses during compilation so its result cannot race with deletion or undo. The child exits after rendering. Source is limited to 64 KB; the preview is capped at 8 million pixels and a 4096-pixel long edge. Compilation has CPU, output-file and wall-time limits. There is no live recompilation on each keystroke and no resident TeX service.
 
 The compiler disables shell escape, restricts file access to its temporary working directory and installed runtime resources, and denies network access. The current macOS isolation mechanism uses `sandbox-exec`; if it cannot start, rendering fails rather than retrying without isolation. Custom user-tree packages, external image files, externalisation and shell-based packages are not supported in this preview.
 

@@ -11,9 +11,9 @@ public struct PDEModel {
 /// Original worked examples. Pre-rendered vectors open without running a TeX engine.
 public enum PDEExamples {
     public static let models = [
-        PDEModel(key:"heat",title:"Heat diffusion — modes and decay",subtitle:"A uniform rod, zero-temperature ends and two initial Fourier modes.",interpretation:"The third mode decays nine times faster. Check the boundary values and energy dissipation."),
+        PDEModel(key:"heat",title:"Heat diffusion — modes and decay",subtitle:"A uniform rod, zero relative-temperature boundary values and two initial Fourier modes.",interpretation:"The third mode has nine times the decay rate. Check the boundary values and energy dissipation."),
         PDEModel(key:"wave",title:"Wave motion — a fixed string",subtitle:"An undamped string released from its first mode with zero initial velocity.",interpretation:"A standing wave exchanges kinetic and strain energy. Its total energy remains constant."),
-        PDEModel(key:"poisson",title:"Poisson — a field on the unit square",subtitle:"A manufactured exact solution, homogeneous Dirichlet data and a five-point discretisation.",interpretation:"Check the PDE residual, boundary values and grid convergence separately.")
+        PDEModel(key:"poisson",title:"Poisson — a field on the unit square",subtitle:"A manufactured exact solution, homogeneous Dirichlet data and a five-point discretisation.",interpretation:"Distinguish the algebraic residual from discretisation error; check boundary values and grid convergence.")
     ]
     public static let parts = ["model","solution","diagram","numerics"]
     public static var resourceDirectory: URL {

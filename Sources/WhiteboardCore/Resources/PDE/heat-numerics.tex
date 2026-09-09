@@ -2,7 +2,8 @@
 x_j&=j\Delta x,\quad t_n=n\Delta t,
 &r&=\frac{\kappa\Delta t}{(\Delta x)^2},\\[5pt]
 u_j^{n+1}&=u_j^n+r(u_{j-1}^n-2u_j^n+u_{j+1}^n),\\[5pt]
-0&\le r\le\tfrac12
+&j=1,\ldots,N-1,\quad n\ge0,\\[3pt]
+0&<r\le\tfrac12
 &&\text{(explicit stability)},\\[5pt]
 u_0^n&=u_N^n=0,\qquad \Delta x=L/N,\\
 \text{error}&=O(\Delta t+\Delta x^2)

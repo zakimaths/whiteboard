@@ -1,5 +1,15 @@
 # Native preview validation
 
+## 0.7 update
+
+**65 local checks pass: 52 core, 3 real TeX and 10 native interaction checks.** New coverage exercises content-based external-change detection, no-op saves, transactional assets, history-aware cleanup, damaged tray entries, removal recovery, EXIF dimensions, general demo restoration, locked selections, multiline text, keyboard cropping, accessibility actions, spatial selection, save retries and waiting for exports before exit.
+
+The installed app contains three general-purpose examples and generic TeX defaults. PDE assets are excluded from its resource directory. Separate GitHub samples contain the academic showcase. Three numerical groups verify the mathematical models, including solved-grid second-order Poisson error; all twelve TeX fragments pass regeneration comparisons against their PNG previews. The full PDE board exports were visually inspected.
+
+The native text editor participates in the accessibility tree and supports explicit line breaks. A final installed-app smoke check opened the general demo, entered its note editor by keyboard, cancelled without changing the note, inspected the tray recovery controls and returned to the personal workspace. HTML export provides readable notes, image descriptions and equation source alongside a visual preview; handwriting is not transcribed and PDFs remain untagged. A full VoiceOver usability session, physical monitor disconnect/sleep/fullscreen testing and interactive capture-permission testing remain outstanding.
+
+Rendering uses a spatial index, undo has count and estimated-byte budgets, large boards save less often during continuous edits, and unchanged saves make no metadata writes. These changes add no idle polling. The final 0.7 build has not had a new long-session resource profile; measurements below describe earlier builds. [Complete audit resolution and limits](AUDIT-RESOLUTION.md).
+
 ## 0.6 update
 
 **44 core checks and 3 real TeX checks pass (47 total).** New coverage verifies bounded capture-tray storage, reopen and independent placed copies, partial-write cleanup, separate libraries, invalid images and rejection of symlinked tray roots/assets. PDE checks verify twelve readable vector assets with editable source, preservation of earlier and renamed demo work, and safe repopulation after all migrated demos are removed.

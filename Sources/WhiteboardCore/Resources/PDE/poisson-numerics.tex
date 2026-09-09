@@ -2,7 +2,9 @@
 x_i&=ih,\ y_j=jh,\ h=1/N,\\[5pt]
 \frac{4u_{ij}-u_{i-1,j}-u_{i+1,j}-u_{i,j-1}-u_{i,j+1}}{h^2}
  &= f_{ij},\\[6pt]
-A\mathbf u&=\mathbf f,\qquad A=A^T>0,\\[5pt]
+&1\le i,j\le N-1,\\[4pt]
+A\mathbf u&=\mathbf f,\quad A=A^T,\quad
+\mathbf z^TA\mathbf z>0\ (\mathbf z\ne0),\\[5pt]
 \mathbf r&=\mathbf f-A\mathbf u_h,\\[5pt]
 \|u_h-u\|_\infty&=O(h^2)
 \quad\text{for this smooth solution.}
