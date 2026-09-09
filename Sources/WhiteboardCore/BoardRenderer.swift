@@ -16,7 +16,7 @@ public enum BoardRenderer {
         return Rect(text.origin.x,text.origin.y,max(1,ceil(size.width)+8),max(text.size*1.5,ceil(size.height)+8))
     }
     public static func contentBounds(_ board: Board, padding: Double = 32) -> Rect {
-        let boxes = board.ink.map(\.bounds)+board.images.map(\.frame)+board.texts.map {textBounds($0)}
+        let boxes = board.ink.map(\.bounds)+board.images.map(\.visibleFrame)+board.texts.map {textBounds($0)}
         guard let first = boxes.first else { return Rect(0,0,800,500) }
         let x = boxes.reduce(first.x) {min($0,$1.x)}, y = boxes.reduce(first.y) {min($0,$1.y)}
         let right = boxes.reduce(first.x+first.width) {max($0,$1.x+$1.width)}
@@ -58,7 +58,11 @@ public enum BoardRenderer {
     private static func draw(_ board: Board, package: URL, context: CGContext, region: Rect, imageScale: Double) throws {
         context.setFillColor(CGColor(red:0.975,green:0.969,blue:0.947,alpha:1))
         context.fill(CGRect(x:region.x,y:region.y,width:region.width,height:region.height))
-        for item in board.images where item.frame.intersects(region) {
+        for item in board.images where item.visibleFrame.intersects(region) {
+            let visible = item.visibleFrame
+            context.saveGState()
+            context.clip(to:CGRect(x:visible.x,y:visible.y,width:visible.width,height:visible.height))
+            defer { context.restoreGState() }
             if let asset = item.vectorAsset {
                 let url = package.appendingPathComponent("assets").appendingPathComponent(asset)
                 guard let document = CGPDFDocument(url as CFURL), let page = document.page(at:1) else { throw BoardError.missingFile }
@@ -72,10 +76,16 @@ public enum BoardRenderer {
             try autoreleasepool {
                 let url = package.appendingPathComponent("assets").appendingPathComponent(item.asset)
                 guard let source = CGImageSourceCreateWithURL(url as CFURL,[kCGImageSourceShouldCache:false] as CFDictionary),
-                      let image = CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceThumbnailMaxPixelSize:Int(min(4096,max(1,ceil(max(item.frame.width,item.frame.height)*imageScale)))),kCGImageSourceCreateThumbnailWithTransform:true,kCGImageSourceShouldCacheImmediately:true] as CFDictionary) else { throw BoardError.missingFile }
-                context.saveGState(); context.translateBy(x:item.frame.x,y:item.frame.y+item.frame.height); context.scaleBy(x:1,y:-1)
+                      let decoded = CGImageSourceCreateThumbnailAtIndex(source,0,[kCGImageSourceCreateThumbnailFromImageAlways:true,kCGImageSourceThumbnailMaxPixelSize:Int(min(4096,max(1,ceil(max(item.frame.width,item.frame.height)*imageScale)))),kCGImageSourceCreateThumbnailWithTransform:true,kCGImageSourceShouldCacheImmediately:true] as CFDictionary) else { throw BoardError.missingFile }
+                let image: CGImage
+                if let crop = item.crop {
+                    let pixels = CGRect(x:crop.x*Double(decoded.width),y:crop.y*Double(decoded.height),width:crop.width*Double(decoded.width),height:crop.height*Double(decoded.height))
+                    guard let cropped = decoded.cropping(to:pixels) else { throw BoardError.invalidData }
+                    image = cropped
+                } else { image = decoded }
+                context.saveGState(); context.translateBy(x:visible.x,y:visible.y+visible.height); context.scaleBy(x:1,y:-1)
                 context.interpolationQuality = .high
-                context.draw(image,in:CGRect(x:0,y:0,width:item.frame.width,height:item.frame.height)); context.restoreGState()
+                context.draw(image,in:CGRect(x:0,y:0,width:visible.width,height:visible.height)); context.restoreGState()
             }
         }
         context.setLineCap(.round); context.setLineJoin(.round)

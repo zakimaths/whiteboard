@@ -8,7 +8,7 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.3.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.4.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
@@ -16,15 +16,15 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 - Scroll for more room, pan, pinch to zoom, or fit all content.
 - Automatic shapes: sketch a line, arrow, box, circle or ellipse with the pen and it snaps when you lift. Undo restores your original ink. Recognition stays local and runs only at pen-up.
 - Explicit shape tools are also available, with Shift constraints and the same undo/save/export behaviour as ink.
-- Drop or paste screenshots; select, move, resize and annotate them. Attached ink follows the image.
+- Drop or paste screenshots; select, crop, restore, move, resize and annotate them. Attached ink follows movement and resizing.
 - A collapsible top shelf whose buttons read real filenames. Red is unfinished, green is finished; labels and symbols accompany the colours.
 - Pin important ideas and move them earlier or later on the shelf. Preferences stay separate for each library.
 - Local autosave, save/reopen, copies, archive, and recovery of the previous saved revision as a separate file.
 - LaTeX and TikZ source editing, bounded image previews and vector PDF assets. No typesetting process remains running between renders.
 - Content or selection export to PNG/PDF; copy an annotated selection as PNG; export a workspace preview with the desktop excluded.
-- Menu-bar show/hide and movement between connected monitors.
+- Menu-bar show/hide and movement between connected monitors. Hold Command–Shift–Space to temporarily use the app underneath; release to return.
 
-This is a working preview, not the complete 84-feature product. Thumbnail cards, direct drag-to-status, cropping, OCR, handwriting-to-equation recognition and longer recovery history remain planned. [Exact implementation status](docs/IMPLEMENTATION.md).
+This is a working preview, not the complete 84-feature product. Thumbnail cards, direct drag-to-status, OCR, handwriting-to-equation recognition and longer recovery history remain planned. [Exact implementation status](docs/IMPLEMENTATION.md).
 
 ## Open and use
 
@@ -50,6 +50,9 @@ To look around without installing anything, [view the public demos](docs/DEMOS.m
 | Rename / new idea | Return / Command–N |
 | Import screenshot | Drop, paste, or File → Import image |
 | Capture screenshot | Camera button; macOS permission may be required |
+| Temporarily use the desktop | Hold Command–Shift–Space; release to return |
+| Crop an image | Select it, C, drag the area to keep, then Return; Escape cancels |
+| Restore a cropped image | Edit → Restore full image |
 | Resize an image | Select it and drag its bottom-right handle |
 | Duplicate selection | Command–D |
 | Fresh copy without annotations | Edit menu |
@@ -69,7 +72,7 @@ New libraries default to `~/Library/Application Support/Whiteboard/Ideas`, outsi
 
 Pins and manual order are stored in macOS preferences for each library. In-app rename and status moves retain them; external Finder renames and moving the library to another Mac do not yet carry these preferences.
 
-Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision and an `assets` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained.
+Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision and an `assets` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained. Cropping also retains the original screenshot in the editable file; it is not redaction. Cropped boards require version 0.4 or later. [Crop controls, exports and file compatibility](docs/CROPPING.md).
 
 **Saved locally** appears after a successful write. Save failures keep the in-memory work and offer a copy workflow. Saves commit completed gestures; an in-flight stroke commits on release, hide or quit. Keep backups of important work while using the preview.
 

@@ -1,5 +1,17 @@
 # Native preview validation
 
+## 0.4 update
+
+**33 core checks and 3 optional real TeX checks pass (36 total).** New checks cover crop geometry, attached-ink resizing, copy/reopen/restore, invalid and locked crops, exclusion of vector maths objects, and format-version validation. A coloured image fixture verifies top-left pixel coordinates in PNG output; PDF inspection confirms the embedded bitmap contains only the cropped pixel dimensions. Editable copies retain their full original image assets.
+
+Injected `NSFileWriteOutOfSpaceError` failures exercise both previous/current metadata writes, new-board creation and asset import. Checks verify byte-identical existing metadata after failure, a readable previous revision, successful retry after lifting the fault, cleanup of failed creation and preservation of existing assets. These are simulated write failures, not a physically full disk or exhaustive filesystem-failure testing.
+
+Native interaction confirmed crop apply, cropped-image resize with aligned ink, undo, switching away and reopening the saved crop, Restore full image, and Escape cancellation. The public crop workspace image is an actual app view export containing fictional content. The personal library was restored after testing.
+
+The held desktop shortcut is implemented using registered press/release events. A complete shortcut chord was sent without an observed adverse effect, but the automation cannot hold a key while independently clicking or scrolling another app. That physical interaction, release after focus changes, shortcut conflicts and sleep/wake recovery remain to be tested; the chord alone is not evidence of those behaviours.
+
+Cropping reuses the bounded image preview cache. Neither cropping nor the shortcut adds an idle worker, event tap or polling timer. Earlier resource measurements below do not measure the final 0.4 build.
+
 ## 0.3 update
 
 **28 core checks and 3 optional real TeX checks pass (31 total).** Added coverage includes four-direction shape constraints; shape attachments, duplication and PNG/PDF exports after reopen; shelf pin/order serialization and in-app rename/status moves; sorting and pagination of 1,001 items without document reads; and separate editable fictional demo assets.
@@ -14,7 +26,7 @@ The 0.3 additions run on input, library changes or explicit demo entry. No idle 
 
 The release build was compiled on Apple silicon with Swift 5.10 and the installed command-line macOS SDK, on macOS 26.6.2. The application has a macOS 13 deployment target; compatibility on older operating-system versions has not yet been tested. No external dependencies were downloaded.
 
-- Current app: `build/Whiteboard.app`, version 0.3.0. Historical measurements below identify their own earlier build.
+- Current app: `build/Whiteboard.app`, version 0.4.0. Historical measurements below identify their own earlier build.
 - App bundle disk size at measurement: approximately 728 KiB. This excludes shared macOS frameworks, document data and development files.
 - Profiled executable SHA-256: `936cadeecfbeb8480996aee8ca7c0e1ee7b9a365ca82a527d04980bafd05a707`. This identifies the earlier stress-tested build, not the 0.2.0 release executable. Later quality changes are described below.
 - The local ad-hoc signature passed strict verification after removing Finder layout metadata from the generated bundle. This is a local development app, not a notarised public distribution.
@@ -44,7 +56,7 @@ The release build was compiled on Apple silicon with Swift 5.10 and the installe
 19. Invalid saves leave the current file unchanged and failed creation leaves no broken shelf item.
 20. PNG/PDF export includes offscreen text and source images, and missing images fail explicitly. The exported PNG was visually inspected for text and image orientation.
 
-These are executable checks against the core used by the app, using temporary files. They establish those cases, not an absence of all possible bugs. Full fault injection, disk-full handling, symlink hardening and multiwriter/cloud-folder concurrency need further coverage before a stable release.
+These are executable checks against the core used by the app, using temporary files. They establish those cases, not an absence of all possible bugs. Broader fault injection beyond the simulated write failures described above, symlink hardening and multiwriter/cloud-folder concurrency need further coverage before a stable release.
 
 ## Optional typesetting checks
 

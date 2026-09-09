@@ -8,7 +8,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var acceptsInput = true
     var packageURL: URL?
     var tool: DrawingTool = .pen {
-        willSet { finishGesture() }
+        willSet { finishGesture(); cancelCrop() }
         didSet { onToolChange?(); window?.makeFirstResponder(self); discardCursorRects(); resetCursorRects() }
     }
     var colour = "ink"
@@ -16,6 +16,10 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var shape: DrawingShape = .arrow
     var automaticShapes = true
     var onRecognition: ((String) -> Void)?
+    var onCropChange: ((Bool) -> Void)?
+    private(set) var croppingID: UUID?
+    private var cropRegion: Rect?
+    private var cropStart: Point?
     var onEditTeX: ((UUID) -> Void)?
     var onToolChange: (() -> Void)?
     var onCopy: (() -> Void)?
@@ -63,7 +67,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         addCursorRect(bounds, cursor: tool == .hand ? .openHand : tool == .text ? .iBeam : .crosshair)
     }
     func load(_ board: Board, at url: URL) {
-        finishEditing(); self.board = board; packageURL = url
+        finishEditing(); cancelCrop(); self.board = board; packageURL = url
         selected.removeAll(); undoStates.removeAll(); redoStates.removeAll(); images.clear(); paths.removeAllObjects()
         reindex(); needsDisplay = true
     }
@@ -73,6 +77,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         redoStates.removeAll()
     }
     func undoEdit() { guard acceptsInput else { return };
+        if croppingID != nil { cancelCrop(); return }
         finishEditing(); finishGesture(); guard let previous = undoStates.popLast() else { return }
         redoStates.append(board); board = previous; selected.removeAll(); reindex(); onEdit?(); needsDisplay = true
     }
@@ -127,26 +132,29 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             }
         }
         let viewportBounds = Rect(board.viewport.origin.x,board.viewport.origin.y,bounds.width/z,bounds.height/z)
-        let visibleImages = board.images.filter { $0.frame.intersects(viewportBounds) }
+        let visibleImages = board.images.filter { ($0.id == croppingID ? $0.frame : $0.visibleFrame).intersects(viewportBounds) }
         if let packageURL {
             images.prepare(visible:visibleImages.map { packageURL.appendingPathComponent("assets").appendingPathComponent($0.asset) })
         }
-        for item in visibleImages where item.frame.intersects(visible) {
+        for item in visibleImages where (item.id == croppingID ? item.frame : item.visibleFrame).intersects(visible) {
+            let displayed = item.id == croppingID ? item.frame : item.visibleFrame
+            context.saveGState(); context.clip(to:displayed.cg)
             if let url = packageURL?.appendingPathComponent("assets").appendingPathComponent(item.asset),
                let image = images.image(at: url, ready: { [weak self] in self?.needsDisplay = true }) {
                 image.draw(in: item.frame.cg, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.medium.rawValue])
             } else {
-                NSColor.lightGray.withAlphaComponent(0.3).setFill(); item.frame.cg.fill()
+                NSColor.lightGray.withAlphaComponent(0.3).setFill(); displayed.cg.fill()
                 let url = packageURL?.appendingPathComponent("assets").appendingPathComponent(item.asset)
                 let label = url.map {images.placeholder(at:$0)} ?? "Image unavailable"
-                (label as NSString).draw(at: CGPoint(x: item.frame.x+12, y: item.frame.y+12), withAttributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.secondaryLabelColor])
+                (label as NSString).draw(at: CGPoint(x: displayed.x+12, y: displayed.y+12), withAttributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.secondaryLabelColor])
             }
-            if selected.contains(item.id) {
-                drawSelection(item.frame)
+            context.restoreGState()
+            if selected.contains(item.id), croppingID == nil {
+                drawSelection(displayed)
                 if !item.locked {
                     let side = 8/z
                     NSColor.systemBlue.setFill()
-                    NSBezierPath(roundedRect:NSRect(x:item.frame.x+item.frame.width-side/2,y:item.frame.y+item.frame.height-side/2,width:side,height:side),xRadius:2/z,yRadius:2/z).fill()
+                    NSBezierPath(roundedRect:NSRect(x:displayed.x+displayed.width-side/2,y:displayed.y+displayed.height-side/2,width:side,height:side),xRadius:2/z,yRadius:2/z).fill()
                 }
             }
         }
@@ -165,6 +173,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         }
         if let active, let activePath { drawInk(active, path: activePath) }
         if let selectRect { drawSelection(selectRect) }
+        if let id = croppingID, let item = board.images.first(where: {$0.id == id}), let region = cropRegion {
+            let mask = NSBezierPath(rect:item.frame.cg); mask.appendRect(region.cg); mask.windingRule = .evenOdd
+            NSColor.black.withAlphaComponent(0.38).setFill(); mask.fill()
+            NSColor.systemBlue.setStroke(); let border = NSBezierPath(rect:region.cg); border.lineWidth = 2/z; border.stroke()
+        }
         context.restoreGState()
         if board.isEmpty && active == nil && editor == nil {
             let text = "A little space for whatever comes to mind."
@@ -188,6 +201,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
     override func mouseDown(with event: NSEvent) {
         guard acceptsInput else { return }
+        if let id = croppingID, let item = board.images.first(where: {$0.id == id}) {
+            let point = world(event)
+            if item.frame.contains(point) { cropStart = point; cropRegion = Rect(point.x,point.y,0,0); needsDisplay = true }
+            return
+        }
         finishEditing(); window?.makeFirstResponder(self)
         let p = world(event); lastPoint = p; gestureStart = p; changedInGesture = false
         panning = tool == .hand || event.modifierFlags.contains(.option)
@@ -195,7 +213,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         if tool == .text { startText(at: p); return }
         if tool == .eraser { beginErase(at: p); return }
         if tool == .select {
-            if let image = board.images.last(where: {selected.contains($0.id) && !$0.locked && hypot(p.x-$0.frame.x-$0.frame.width,p.y-$0.frame.y-$0.frame.height) < 12/board.viewport.zoom}) {
+            if let image = board.images.last(where: {selected.contains($0.id) && !$0.locked && hypot(p.x-$0.visibleFrame.x-$0.visibleFrame.width,p.y-$0.visibleFrame.y-$0.visibleFrame.height) < 12/board.viewport.zoom}) {
                 checkpoint(); resizingID = image.id; return
             }
             if let hit = hitObject(p) {
@@ -207,7 +225,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             needsDisplay = true; return
         }
         if tool != .shape { checkpoint() }
-        let attached = board.images.last(where: {$0.frame.contains(p)})?.id
+        let attached = board.images.last(where: {$0.visibleFrame.contains(p)})?.id
         activeShape = tool == .shape ? shape : nil; shapeEnd = p
         keepFreehand = event.modifierFlags.contains(.shift)
         active = Ink(points: [p], colour: colour, width: tool == .highlighter ? 18 : penWidth, highlighter: tool == .highlighter, imageID: attached)
@@ -216,12 +234,13 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     override func mouseDragged(with event: NSEvent) {
         guard acceptsInput else { return }
         let p = world(event)
+        if croppingID != nil { updateCrop(to:p); return }
         if panning, let lastPoint {
             board.viewport.origin.x += lastPoint.x-p.x; board.viewport.origin.y += lastPoint.y-p.y
             needsDisplay = true; onViewChange?(); return
         }
         if let id = resizingID, let image = board.images.first(where: {$0.id == id}) {
-            board.resizeImage(id:id,width:max(24,min(20_000,p.x-image.frame.x)))
+            board.resizeImage(id:id,width:max(24,min(20_000,p.x-image.visibleFrame.x)))
             changedInGesture = true; reindex(); needsDisplay = true; return
         }
         if erasing { erase(at: p); return }
@@ -247,6 +266,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         else { super.flagsChanged(with:event) }
     }
     override func mouseUp(with event: NSEvent) {
+        if croppingID != nil { updateCrop(to:world(event)); cropStart = nil; return }
         if activeShape != nil { shapeEnd = world(event); updateShape(constrained:event.modifierFlags.contains(.shift)) }
         if event.modifierFlags.contains(.shift) { keepFreehand = true }
         finishGesture()
@@ -274,15 +294,15 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         activeShape = nil; shapeEnd = nil
         if let rect = selectRect {
             for ink in board.ink where (boundsByID[ink.id]?.intersects(rect) ?? false) { selected.insert(ink.id) }
-            for image in board.images where image.frame.intersects(rect) { selected.insert(image.id) }
+            for image in board.images where image.visibleFrame.intersects(rect) { selected.insert(image.id) }
             for text in board.texts where textRect(text).intersects(rect) { selected.insert(text.id) }
             selectRect = nil
         }
         if changedInGesture { onEdit?() }
         erasing = false; moving = false; resizingID = nil; panning = false; changedInGesture = false; needsDisplay = true
     }
-    override func rightMouseDown(with event: NSEvent) { guard acceptsInput else { return }; finishEditing(); beginErase(at: world(event)) }
-    override func rightMouseDragged(with event: NSEvent) { erase(at: world(event)) }
+    override func rightMouseDown(with event: NSEvent) { guard acceptsInput, croppingID == nil else { return }; finishEditing(); beginErase(at: world(event)) }
+    override func rightMouseDragged(with event: NSEvent) { guard acceptsInput, croppingID == nil else { return }; erase(at: world(event)) }
     override func rightMouseUp(with event: NSEvent) { finishGesture() }
     private func beginErase(at p: Point) { checkpoint(); erasing = true; changedInGesture = false; erase(at: p) }
     private func erase(at p: Point) {
@@ -295,7 +315,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private func hitObject(_ p: Point) -> UUID? {
         if let t = board.texts.last(where: {textRect($0).contains(p)}) { return t.id }
         if let ink = board.ink.last(where: {$0.hits(p, radius: 6/board.viewport.zoom)}) { return ink.id }
-        return board.images.last(where: {$0.frame.contains(p)})?.id
+        return board.images.last(where: {$0.visibleFrame.contains(p)})?.id
     }
     private func moveSelection(_ delta: Point) {
         let movingImages = Set(board.images.filter {selected.contains($0.id) && !$0.locked}.map(\.id))
@@ -380,6 +400,11 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
     override func keyDown(with event: NSEvent) {
         guard acceptsInput else { return }
+        if croppingID != nil {
+            if event.keyCode == 53 { cancelCrop(); return }
+            if event.keyCode == 36 { applyCrop(); return }
+            if !event.modifierFlags.contains(.command) { return }
+        }
         if event.keyCode == 53, activeShape != nil {
             active = nil; activePath = nil; activeShape = nil; shapeEnd = nil; changedInGesture = false; needsDisplay = true; return
         }
@@ -407,8 +432,32 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         case 51,117: deleteSelection()
         case 36: onRename?()
         default:
-            switch key { case "p": tool = .pen; case "h": tool = .highlighter; case "e": tool = .eraser; case "v": tool = .select; case "t": tool = .text; case "a": shape = .arrow; tool = .shape; case "l": shape = .line; tool = .shape; case "r": shape = .rectangle; tool = .shape; case "o": shape = .ellipse; tool = .shape; case " ": tool = .hand; default: super.keyDown(with: event) }
+            switch key { case "p": tool = .pen; case "h": tool = .highlighter; case "e": tool = .eraser; case "v": tool = .select; case "t": tool = .text; case "c": beginCrop(); case "a": shape = .arrow; tool = .shape; case "l": shape = .line; tool = .shape; case "r": shape = .rectangle; tool = .shape; case "o": shape = .ellipse; tool = .shape; case " ": tool = .hand; default: super.keyDown(with: event) }
         }
+    }
+    func beginCrop() {
+        guard acceptsInput, selected.count == 1, let item = board.images.first(where: {selected.contains($0.id) && !$0.locked && $0.vectorAsset == nil}) else { return }
+        finishEditing(); finishGesture(); tool = .select
+        croppingID = item.id; cropRegion = item.visibleFrame; cropStart = nil
+        onCropChange?(true); needsDisplay = true
+    }
+    private func updateCrop(to point: Point) {
+        guard let id = croppingID, let start = cropStart, let item = board.images.first(where: {$0.id == id}) else { return }
+        let x = max(item.frame.x,min(item.frame.x+item.frame.width,point.x)), y = max(item.frame.y,min(item.frame.y+item.frame.height,point.y))
+        cropRegion = Rect(min(start.x,x),min(start.y,y),abs(x-start.x),abs(y-start.y)); needsDisplay = true
+    }
+    func applyCrop() {
+        guard acceptsInput, let id = croppingID, let region = cropRegion, min(region.width,region.height)*board.viewport.zoom >= 8 else { NSSound.beep(); return }
+        var next = board
+        if next.cropImage(id:id,to:region) { checkpoint(); board = next; onEdit?() }
+        cancelCrop()
+    }
+    func cancelCrop() { croppingID = nil; cropRegion = nil; cropStart = nil; onCropChange?(false); needsDisplay = true }
+    func restoreImages() {
+        guard acceptsInput else { return }; cancelCrop()
+        var next = board; var changed = false
+        for item in board.images where selected.contains(item.id) { if next.cropImage(id:item.id,to:nil) { changed = true } }
+        if changed { checkpoint(); board = next; onEdit?(); needsDisplay = true }
     }
     func pasteContent() {
         let pb = NSPasteboard.general, p = board.viewport.world(Point(bounds.midX-200,bounds.midY-150))

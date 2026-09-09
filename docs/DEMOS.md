@@ -1,6 +1,6 @@
 # Try Whiteboard
 
-**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.3.0/Whiteboard-0.3.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.3.0/Whiteboard-Sample-Ideas.zip)**
+**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.4.0/Whiteboard-0.4.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.4.0/Whiteboard-Sample-Ideas.zip)**
 
 You can view every image on this page without installing the app or signing in. To try the actual product on an Apple silicon Mac, download the ZIP, open Whiteboard, then click **Demo** at the top. Use **My ideas** to return to your own workspace. The demo is local and editable, with no account or trial expiry. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
 
@@ -13,6 +13,16 @@ The examples use original fictional content. The workspace images were exported 
 Click **Demo**, then **One question, two attempts**. Select the question image and drag its bottom-right handle: its annotation stays attached. Undo, or use **Edit → Fresh copy without annotations** for another attempt. Export the selection or the whole board.
 
 ![Actual academic workspace](demos/academic-workspace.png)
+
+## Keep the useful part of a screenshot
+
+In **One question, two attempts**, select the question image, press **C** and drag around the question lines. Press **Return** or click **Apply crop**. Resize or move the result: attached ink stays aligned. Switch to another shelf idea and return to see the saved crop. **Edit → Restore full image** brings the original back. Escape cancels a crop before applying it.
+
+![Actual 0.4 workspace with a cropped question and aligned annotation](demos/crop-workspace.png)
+
+Cropping changes the image, not separate ink. Editable boards retain the original screenshot. [Crop and export details](CROPPING.md).
+
+To reach another app temporarily, hold **Command–Shift–Space**, interact underneath, then release to return. **Shift–Command–B** or the menu-bar Show action remains available. Physical held-key interaction across applications is still awaiting dedicated testing.
 
 ## Shapes and your shelf
 
@@ -52,4 +62,4 @@ This creates a new `build/Sample Ideas` library and PNG/PDF exports in `build/Sa
 
 The release also includes an editable sample-library ZIP. These four generated sample boards do not require TeX. The maths workspace demonstrates the separate source editor with its built-in examples.
 
-The academic and maths screenshots were captured from 0.2; the shapes workspace is from 0.3. All are actual app view exports.
+The academic and maths screenshots were captured from 0.2; the shapes workspace is from 0.3; the cropped workspace is from 0.4. All are actual app view exports.

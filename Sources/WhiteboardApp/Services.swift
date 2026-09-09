@@ -88,16 +88,23 @@ final class HotKey {
     private var reference: EventHotKeyRef?
     private var handler: EventHandlerRef?
     let action: () -> Void
-    init(action: @escaping () -> Void) {
-        self.action = action
-        var event = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
-            guard let context else { return OSStatus(eventNotHandledErr) }
-            Unmanaged<HotKey>.fromOpaque(context).takeUnretainedValue().action()
+    let released: (() -> Void)?
+    let identifier: UInt32
+    init(keyCode: UInt32 = UInt32(kVK_ANSI_B), modifiers: UInt32 = UInt32(cmdKey | shiftKey), id: UInt32 = 1, action: @escaping () -> Void, released: (() -> Void)? = nil) {
+        self.action = action; self.released = released; identifier = id
+        var events = [EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyPressed)),EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyReleased))]
+        let status = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
+            guard let context, let event else { return OSStatus(eventNotHandledErr) }
+            let owner = Unmanaged<HotKey>.fromOpaque(context).takeUnretainedValue()
+            var id = EventHotKeyID()
+            guard GetEventParameter(event,EventParamName(kEventParamDirectObject),EventParamType(typeEventHotKeyID),nil,MemoryLayout<EventHotKeyID>.size,nil,&id) == noErr,
+                  id.signature == 0x57425244, id.id == owner.identifier else { return OSStatus(eventNotHandledErr) }
+            if GetEventKind(event) == UInt32(kEventHotKeyReleased) { owner.released?() } else { owner.action() }
             return noErr
-        }, 1, &event, Unmanaged.passUnretained(self).toOpaque(), &handler)
-        let identifier = EventHotKeyID(signature: 0x57425244, id: 1)
-        RegisterEventHotKey(UInt32(kVK_ANSI_B), UInt32(cmdKey | shiftKey), identifier, GetApplicationEventTarget(), 0, &reference)
+        }, events.count, &events, Unmanaged.passUnretained(self).toOpaque(), &handler)
+        guard status == noErr else { return }
+        let identifier = EventHotKeyID(signature: 0x57425244, id: id)
+        RegisterEventHotKey(keyCode,modifiers,identifier,GetApplicationEventTarget(),0,&reference)
     }
     var registered: Bool { reference != nil }
     deinit { if let reference { UnregisterEventHotKey(reference) }; if let handler { RemoveEventHandler(handler) } }

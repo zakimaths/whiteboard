@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import UniformTypeIdentifiers
 import WhiteboardCore
 
@@ -17,7 +18,7 @@ final class PanelView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
 
-final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegate {
+final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegate, NSMenuItemValidation {
     let io = DispatchQueue(label: "Whiteboard.storage", qos: .utility)
     let typesetting = DispatchQueue(label:"Whiteboard.typesetting",qos:.utility)
     var renderingTeX = false
@@ -36,6 +37,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var statusControl: NSSegmentedControl!
     var statusItem: NSStatusItem!
     var hotKey: HotKey?
+    var desktopHotKey: HotKey?
+    var usingDesktop = false
+    var cropPanel: PanelView?
+    var desktopHint: NSMenuItem?
     var watches: [DirectoryWatch] = []
     var items: [ShelfItem] = []
     var shelfOrder = ShelfOrder()
@@ -73,7 +78,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         makeMainMenu(); makeWindow(); configureCanvas(); makeStatusMenu()
-        hotKey = HotKey { [weak self] in self?.toggleBoard() }
+        hotKey = HotKey(action: { [weak self] in self?.toggleBoard() })
         canvas.colour = UserDefaults.standard.string(forKey:"penColour") ?? "ink"
         let width = UserDefaults.standard.double(forKey:"penWidth"); if (1...12).contains(width) { canvas.penWidth = width }
         canvas.automaticShapes = UserDefaults.standard.object(forKey:"automaticShapes") == nil || UserDefaults.standard.bool(forKey:"automaticShapes")
@@ -111,6 +116,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         edit.addItem(withTitle:"Duplicate selection",action:#selector(duplicateSelection),keyEquivalent:"d").target = self
         edit.addItem(withTitle:"Fresh copy without annotations",action:#selector(duplicateReference),keyEquivalent:"").target = self
         edit.addItem(withTitle:"Fit all content",action:#selector(fitContent),keyEquivalent:"1").target = self
+        edit.addItem(withTitle:"Crop selected image…",action:#selector(cropImage),keyEquivalent:"").target = self
+        edit.addItem(withTitle:"Restore full image",action:#selector(restoreImage),keyEquivalent:"").target = self
         let shapes = NSMenuItem(title:"Drawing shapes",action:nil,keyEquivalent:"")
         shapes.submenu = shapeMenu(); edit.addItem(shapes)
         editItem.submenu = edit; main.addItem(editItem); NSApp.mainMenu = main
@@ -126,7 +133,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let content = NSView(frame: NSRect(origin: .zero, size: screen.visibleFrame.size))
         canvas.frame = content.bounds; canvas.autoresizingMask = [.width,.height]; content.addSubview(canvas)
         window.contentView = content
-        buildShelf(); buildToolbar(); move(to: screen); showBoard()
+        buildShelf(); buildToolbar(); buildCropPanel(); move(to: screen); showBoard()
     }
     private func button(_ title: String, _ action: Selector, symbol: String? = nil) -> NSButton {
         let button = NSButton(title: title, target: self, action: action)
@@ -227,7 +234,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let finish = button("Finish",#selector(finishIdea),symbol:"checkmark")
         finishControl = finish; row.addArrangedSubview(finish)
         row.addArrangedSubview(button("Export",#selector(exportPNG),symbol: "square.and.arrow.up"))
-        row.addArrangedSubview(button("Hide",#selector(hideBoard),symbol: "eye.slash"))
+        let hide = button("Hide",#selector(hideBoard),symbol:"eye.slash")
+        hide.toolTip = "Hide the board, or hold ⌘⇧Space for temporary desktop access and release to return."
+        row.addArrangedSubview(hide)
         NSLayoutConstraint.activate([
             bottom.centerXAnchor.constraint(equalTo: content.centerXAnchor),bottom.bottomAnchor.constraint(equalTo: content.bottomAnchor,constant: -16),
             row.leadingAnchor.constraint(equalTo: bottom.leadingAnchor,constant: 12),row.trailingAnchor.constraint(equalTo: bottom.trailingAnchor,constant: -12),
@@ -236,6 +245,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         updateTool()
     }
     private func configureCanvas() {
+        canvas.onCropChange = { [weak self] cropping in self?.cropPanel?.isHidden = !cropping }
         canvas.onRecognition = { [weak self] name in
             self?.automaticShapesControl?.title = "Auto shapes · "+name
             self?.automaticShapesControl?.setAccessibilityLabel("Auto shapes. Recognised "+name+". Undo restores the original ink.")
@@ -251,6 +261,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         canvas.onRename = { [weak self] in self?.renameIdea() }
         canvas.onExport = { [weak self] in self?.exportPNG() }
     }
+    private func buildCropPanel() {
+        guard let content = window.contentView else { return }
+        let panel = PanelView(frame:.zero); panel.translatesAutoresizingMaskIntoConstraints = false; panel.isHidden = true
+        let row = NSStackView(); row.spacing = 10; row.translatesAutoresizingMaskIntoConstraints = false
+        let hint = NSTextField(labelWithString:"Drag the area to keep. Your original stays saved."); hint.font = .systemFont(ofSize:12)
+        row.addArrangedSubview(hint); row.addArrangedSubview(button("Cancel",#selector(cancelCrop)))
+        row.addArrangedSubview(button("Apply crop",#selector(applyCrop),symbol:"crop"))
+        panel.addSubview(row); content.addSubview(panel); cropPanel = panel
+        NSLayoutConstraint.activate([panel.centerXAnchor.constraint(equalTo:content.centerXAnchor),panel.bottomAnchor.constraint(equalTo:content.bottomAnchor,constant:-76),row.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:12),row.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-12),row.topAnchor.constraint(equalTo:panel.topAnchor,constant:10),row.bottomAnchor.constraint(equalTo:panel.bottomAnchor,constant:-10)])
+    }
+    @objc func cropImage() { canvas.beginCrop() }
+    @objc func applyCrop() { canvas.applyCrop() }
+    @objc func cancelCrop() { canvas.cancelCrop() }
+    @objc func restoreImage() { canvas.restoreImages() }
     func openLibrary(_ root: URL) {
         isBusy = true; libraryGeneration += 1; let generation = libraryGeneration
         io.async {
@@ -461,6 +485,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             menu.addItem(withTitle: title, action: action, keyEquivalent: key).target = self
         }
         add("Show / hide board  ⇧⌘B", #selector(toggleBoard)); add("Bring board here", #selector(bringHere)); add("Move to display…",#selector(showScreens))
+        let hint = NSMenuItem(title:desktopHotKey?.registered == true ? "Hold ⌘⇧Space to use the desktop" : "Desktop hold shortcut unavailable",action:nil,keyEquivalent:""); hint.isEnabled = false; desktopHint = hint; menu.addItem(hint)
         menu.addItem(.separator()); add("New idea",#selector(newIdea)); add("Rename current file…",#selector(renameIdea)); add("Save a copy…",#selector(saveCopy))
         add("Mark finished / unfinished",#selector(finishIdea)); add("Archive current idea",#selector(archiveIdea))
         menu.addItem(.separator()); add("Choose ideas folder…",#selector(chooseFolder)); add("Show ideas folder",#selector(revealFolder))
@@ -470,8 +495,24 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         statusItem.menu = menu
     }
     @objc func toggleBoard() { window.isVisible ? hideBoard() : showBoard() }
-    func showBoard() { window.ignoresMouseEvents = false; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); window.makeFirstResponder(canvas) }
-    @objc func hideBoard() { canvas.finishEditing(); canvas.finishGesture(); saveNow(); window.orderOut(nil); canvas.images.clear() }
+    func showBoard() {
+        usingDesktop = false; window.ignoresMouseEvents = false; window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps:true); window.makeFirstResponder(canvas)
+        if desktopHotKey == nil {
+            desktopHotKey = HotKey(keyCode:UInt32(kVK_Space),modifiers:UInt32(cmdKey|shiftKey),id:2,action:{ [weak self] in self?.beginDesktopAccess() },released:{ [weak self] in self?.endDesktopAccess() })
+        }
+        desktopHint?.title = desktopHotKey?.registered == true ? "Hold ⌘⇧Space to use the desktop" : "Desktop hold shortcut unavailable"
+    }
+    private func beginDesktopAccess() {
+        guard !usingDesktop, window.isVisible, !isBusy, NSApp.modalWindow == nil else { return }
+        canvas.finishEditing(); canvas.finishGesture(); saveNow()
+        usingDesktop = true; window.ignoresMouseEvents = true; window.orderOut(nil)
+    }
+    private func endDesktopAccess() { guard usingDesktop else { return }; showBoard() }
+    @objc func hideBoard() {
+        usingDesktop = false; desktopHotKey = nil
+        canvas.finishEditing(); canvas.finishGesture(); saveNow(); window.orderOut(nil); canvas.images.clear()
+    }
     @objc func toggleShelf() {
         let status = statusControl?.selectedSegment ?? 0, query = search.stringValue
         collapsed.toggle(); buildShelf()
@@ -640,7 +681,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let screen = NSScreen.screens.first(where:{screenID($0) == onScreen}) ?? NSScreen.main
         if let screen { move(to:screen) }
     }
-    @objc func willSleep() { canvas.finishEditing(); canvas.finishGesture(); saveNow() }
+    @objc func willSleep() { if usingDesktop { hideBoard() } else { canvas.finishEditing(); canvas.finishGesture(); saveNow() } }
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(cropImage) { return !isBusy && canvas.selected.count == 1 && canvas.board.images.contains {canvas.selected.contains($0.id) && !$0.locked && $0.vectorAsset == nil} }
+        if menuItem.action == #selector(restoreImage) { return !isBusy && canvas.board.images.contains {canvas.selected.contains($0.id) && !$0.locked && $0.crop != nil} }
+        return true
+    }
     @objc func insertLaTeX() { presentTeX(kind:.latex) }
     @objc func insertTikZ() { presentTeX(kind:.tikz) }
     @objc func editSelectedTeX() {
@@ -795,7 +841,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     }
     @objc func showHelp() {
         let alert = NSAlert(); alert.messageText = "Whiteboard · native preview"
-        alert.informativeText = "⇧⌘B show / hide\nP pen · H highlighter · E eraser · V select · T text\nAuto shapes: draw with the pen and lift to recognise. Undo restores the original ink.\nHold Shift with the pen to keep freehand, or turn Auto shapes off.\nL line · A arrow · R rectangle · O ellipse\nHold Shift for equal sides or 45° angles. Escape cancels a shape.\nRight-drag erases ink. Scroll for more space.\nPinch or ⌘ scroll to zoom. Option-drag pans.\n⌘Z undo · ⇧⌘Z redo · ⌘V paste · Return rename\n\nSelect images or ink to move them. Drag an image’s bottom-right handle to resize its annotations together. ⌘D duplicates; ⌘1 fits all content; ⌘C copies a selection as PNG. Control-click a shelf file to pin, reorder, change status or archive. Demo opens a separate editable sample workspace; My ideas brings you back.\n\nAutosaves after edits. Handwriting transcription, thumbnails and drag-to-status are planned; see docs/IMPLEMENTATION.md."
+        alert.informativeText = "⇧⌘B show / hide\nP pen · H highlighter · E eraser · V select · T text\nAuto shapes: draw with the pen and lift to recognise. Undo restores the original ink.\nHold Shift with the pen to keep freehand, or turn Auto shapes off.\nL line · A arrow · R rectangle · O ellipse\nHold Shift for equal sides or 45° angles. Escape cancels a shape.\nSelect a screenshot, then C to crop. Return applies; Escape cancels.\nEdit → Restore full image removes its crop. Ink stays in place.\nHold ⌘⇧Space to use the desktop; release to return.\nRight-drag erases ink. Scroll for more space.\nPinch or ⌘ scroll to zoom. Option-drag pans.\n⌘Z undo · ⇧⌘Z redo · ⌘V paste · Return rename\n\nSelect images or ink to move them. Drag an image’s bottom-right handle to resize its annotations together. ⌘D duplicates; ⌘1 fits all content; ⌘C copies a selection as PNG. Control-click a shelf file to pin, reorder, change status or archive. Demo opens a separate editable sample workspace; My ideas brings you back.\n\nAutosaves after edits. Handwriting transcription, thumbnails and drag-to-status are planned; see docs/IMPLEMENTATION.md."
         alert.addButton(withTitle:"Got it"); alert.runModal()
     }
     @objc func quit() { NSApp.terminate(nil) }

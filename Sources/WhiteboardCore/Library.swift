@@ -15,8 +15,10 @@ public final class Library {
     public let root: URL
     private let fm = FileManager.default
     private var knownVersions: [URL: Date] = [:]
-    public init(root: URL) throws {
+    private let write: (Data,URL) throws -> Void
+    public init(root: URL, atomicWrite: @escaping (Data,URL) throws -> Void = {try $0.write(to:$1,options:.atomic)}) throws {
         self.root = root.standardizedFileURL
+        self.write = atomicWrite
         for status in IdeaStatus.allCases {
             try fm.createDirectory(at: folder(status), withIntermediateDirectories: true)
         }
@@ -78,12 +80,13 @@ public final class Library {
         guard fm.fileExists(atPath: url.path) else { throw BoardError.missingFile }
         if checkingVersion, let known = knownVersions[url], try stamp(file) != known { throw BoardError.conflict }
         let data = try JSONEncoder().encode(board)
+        guard data.count < 64*1024*1024 else { throw BoardError.invalidData }
         // Keep one recoverable previous version. Never move away the current valid file.
         if fm.fileExists(atPath: file.path) {
             let previous = try Data(contentsOf: file)
-            try previous.write(to: url.appendingPathComponent("previous.json"), options: .atomic)
+            try write(previous,url.appendingPathComponent("previous.json"))
         }
-        try data.write(to: file, options: .atomic)
+        try write(data,file)
         knownVersions[url] = try stamp(file)
     }
     public func recoverPrevious(_ url: URL) throws -> URL {
@@ -120,7 +123,7 @@ public final class Library {
     }
     public func importAsset(data: Data, extension ext: String, to url: URL) throws -> String {
         let name = UUID().uuidString + "." + (["png", "jpg", "jpeg", "heic", "tiff", "gif", "pdf"].contains(ext.lowercased()) ? ext.lowercased() : "png")
-        try data.write(to: url.appendingPathComponent("assets").appendingPathComponent(name), options: .atomic)
+        try write(data,url.appendingPathComponent("assets").appendingPathComponent(name))
         return name
     }
 }

@@ -36,13 +36,13 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 30 | Fresh space | Built: scrolls below current content |
 | 31 | No naming required | Built: unique Untitled idea filenames |
 | 32 | Type/draw; zoom out; scroll for space | Built |
-| 33 | Hold to interact underneath | Next: requires safe release/focus recovery |
+| 33 | Hold to interact underneath | Built: hold Command–Shift–Space; release returns the board. Physical held-key interaction and shortcut conflicts still need validation |
 | 34 | Background choices | Built: transparent, paper and dim |
 | 35 | Remember setup | Partial: per-board background and viewport, saved colour/width and last-opened idea; toolbar placement next |
 | 36 | Right mouse erase | Built: stroke eraser uses segment hit testing |
 | 37 | Quick title | Built: Return opens filename rename; remapping next |
 | 38 | Double-click clear | Next: current clear-ink action is explicit and undoable |
-| 39 | Movable compact toolbar | Partial: compact tools exist; toolbar dragging/capture button next |
+| 39 | Movable compact toolbar | Partial: compact tools exist; capture button included; toolbar dragging next |
 | 40 | Drawing helpers | Built: automatic freehand line/arrow/rectangle/circle/ellipse recognition at pen-up, with original-ink Undo and an off switch; explicit tools and Shift constraints also available. Multi-stroke recognition and broader shape vocabulary remain future work |
 | 41 | Navigation | Partial: pan, zoom, reset, fresh space and fit-all; last-view history next |
 | 42 | Select and organise | Partial: selection, moving, screenshot resizing, locking and duplication; grouping next |
@@ -53,7 +53,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 47 | Paste image/text/link | Partial: images and plain text; URL-specific clickable objects next |
 | 48 | Capture tray | Next |
 | 49 | Repeat capture area | Next |
-| 50 | Crop/resize images | Partial: proportional bottom-right-handle resizing; reversible cropping next |
+| 50 | Crop/resize images | Built: reversible bitmap cropping, restore full image and proportional resizing; LaTeX/TikZ vector objects are excluded from cropping |
 | 51 | Attach ink to screenshot | Partial: ink starting on an image follows movement and proportional resizing; explicit attachment next |
 | 52 | Lock reference | Built: menu action locks selected images against movement |
 | 53 | Side-by-side arrangement | Partial: manual positioning; automatic alignment next |
@@ -91,8 +91,8 @@ The approved 84-item framework is retained below. **Built** means the first nati
 
 ## Next engineering work
 
-1. Harden the capture/save/shelf loop with prolonged-stroke recovery, large-library pagination tests, disk-full fault injection and external-keyboard shortcut checks.
-2. Add direct drag-to-status, thumbnail previews only on demand, reversible image cropping and export options.
+1. Harden the capture/save/shelf loop with prolonged-stroke recovery, large-library pagination tests, broader save-failure scenarios and external-keyboard shortcut checks; simulated disk-full writes are covered.
+2. Add direct drag-to-status, thumbnail previews only on demand and export options.
 3. Add performance instrumentation and large-board fixtures before changing the renderer.
 4. Implement recognition as an optional selection action, then evaluate whether pause-based recognition is useful within the power budget.
 

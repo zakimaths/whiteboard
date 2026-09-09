@@ -60,7 +60,13 @@ public struct BoardImage: Codable, Equatable, Identifiable {
     public var locked: Bool = false
     public var tex: TeXSource?
     public var vectorAsset: String?
+    /// Normalised source-image region, measured from its top-left. Original assets stay intact.
+    public var crop: Rect?
     public init(asset: String, frame: Rect) { self.asset = asset; self.frame = frame }
+    public var visibleFrame: Rect {
+        guard let crop else { return frame }
+        return Rect(frame.x+crop.x*frame.width,frame.y+crop.y*frame.height,frame.width*crop.width,frame.height*crop.height)
+    }
 }
 
 public struct BoardText: Codable, Equatable, Identifiable {
@@ -105,12 +111,31 @@ public struct Board: Codable, Equatable {
     public mutating func resizeImage(id: UUID, width: Double) {
         guard let i = images.firstIndex(where: {$0.id == id}), !images[i].locked,
               width.isFinite, width >= 24, width <= 20_000 else { return }
-        let old = images[i].frame, scale = width / old.width
-        images[i].frame.width = width; images[i].frame.height *= scale
+        let old = images[i].frame, anchor = images[i].visibleFrame, scale = width / anchor.width
+        guard scale.isFinite, (old.width*scale).isFinite, (old.height*scale).isFinite else { return }
+        images[i].frame.x = anchor.x+(old.x-anchor.x)*scale
+        images[i].frame.y = anchor.y+(old.y-anchor.y)*scale
+        images[i].frame.height *= scale
+        images[i].frame.width = old.width*scale
         for j in ink.indices where ink[j].imageID == id {
-            ink[j].points = ink[j].points.map {Point(old.x+($0.x-old.x)*scale, old.y+($0.y-old.y)*scale)}
+            ink[j].points = ink[j].points.map {Point(anchor.x+($0.x-anchor.x)*scale, anchor.y+($0.y-anchor.y)*scale)}
             ink[j].width = min(200, max(0.1, ink[j].width*scale))
         }
+    }
+    @discardableResult public mutating func cropImage(id: UUID, to region: Rect?) -> Bool {
+        guard let i = images.firstIndex(where: {$0.id == id}), !images[i].locked, images[i].vectorAsset == nil else { return false }
+        guard let region else { let changed = images[i].crop != nil; images[i].crop = nil; return changed }
+        guard [region.x,region.y,region.width,region.height].allSatisfy({$0.isFinite}), region.width > 0, region.height > 0 else { return false }
+        let frame = images[i].frame
+        let x = max(frame.x,region.x), y = max(frame.y,region.y)
+        let right = min(frame.x+frame.width,region.x+region.width), bottom = min(frame.y+frame.height,region.y+region.height)
+        guard right > x, bottom > y else { return false }
+        let crop = Rect(max(0,(x-frame.x)/frame.width),max(0,(y-frame.y)/frame.height),min(1,(right-x)/frame.width),min(1,(bottom-y)/frame.height))
+        let value: Rect? = crop == Rect(0,0,1,1) ? nil : crop
+        guard images[i].crop != value else { return false }
+        images[i].crop = value
+        if value != nil { version = 2 }
+        return true
     }
     public func selection(_ ids: Set<UUID>) -> Board {
         var result = self; result.id = UUID()
@@ -140,7 +165,7 @@ public struct Board: Codable, Equatable {
         return Set(copy.images.map(\.id)+copy.ink.map(\.id)+copy.texts.map(\.id))
     }
     public func validated() throws -> Board {
-        guard version == 1 else { throw BoardError.unsupportedVersion }
+        guard version == 1 || version == 2 else { throw BoardError.unsupportedVersion }
         guard viewport.zoom.isFinite, (0.15...4).contains(viewport.zoom),
               viewport.origin.x.isFinite, viewport.origin.y.isFinite,
               ink.count <= 100_000, images.count <= 10_000, texts.count <= 50_000 else { throw BoardError.invalidData }
@@ -160,6 +185,11 @@ public struct Board: Codable, Equatable {
                 guard asset == URL(fileURLWithPath:asset).lastPathComponent, !asset.contains(".."), !asset.isEmpty else { throw BoardError.invalidData }
             }
             if let tex = image.tex { guard tex.code.utf8.count <= 64*1024 else { throw BoardError.invalidData } }
+            if let crop = image.crop {
+                guard version >= 2, image.vectorAsset == nil, [crop.x,crop.y,crop.width,crop.height].allSatisfy({$0.isFinite}),
+                      crop.x >= 0, crop.y >= 0, crop.width > 0, crop.height > 0,
+                      crop.x+crop.width <= 1.000000001, crop.y+crop.height <= 1.000000001 else { throw BoardError.invalidData }
+            }
         }
         for text in texts {
             guard text.origin.x.isFinite, text.origin.y.isFinite, text.size.isFinite,

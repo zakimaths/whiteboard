@@ -344,6 +344,109 @@ check("Automatic shapes leave ambiguous marks, small writing and oversized strok
     let circle = (0...120).map {i -> Point in let a = Double(i)*2 * .pi/120; return Point(100+60*cos(a),100+60*sin(a))}
     try expect(ShapeRecognition.recognise(circle,zoom:0.15) == nil)
 }
+check("Crops preserve source geometry, annotations and undoable restoration after reopen") {
+    try temporaryLibrary { library in
+        var board = Board(); let image = BoardImage(asset:"sample.png",frame:Rect(10,20,400,200)); board.images = [image]
+        board.ink = [Ink(points:[Point(150,100),Point(300,100)],imageID:image.id)]
+        try expect(board.cropImage(id:image.id,to:Rect(110,70,200,100)))
+        try expect(board.version == 2 && board.images[0].visibleFrame == Rect(110,70,200,100))
+        try expect(board.images[0].frame == image.frame && board.ink[0].points[0] == Point(150,100))
+        board.resizeImage(id:image.id,width:400)
+        try expect(board.images[0].visibleFrame == Rect(110,70,400,200))
+        try expect(board.ink[0].points[0] == Point(190,130))
+        board.moveImage(id:image.id,by:Point(30,40))
+        let url = try library.create(board:board); let reopened = try library.load(url)
+        try expect(reopened == board && reopened.images[0].visibleFrame == Rect(140,110,400,200))
+        var restored = reopened; try expect(restored.cropImage(id:image.id,to:nil))
+        try expect(restored.images[0].visibleFrame == Rect(-60,10,800,400))
+        try expect(restored.ink == reopened.ink)
+        var copy = board; _ = copy.duplicate([image.id]); try expect(copy.images[1].crop == board.images[0].crop)
+        try expect(copy.ink[1].imageID == copy.images[1].id)
+    }
+}
+check("Invalid, locked and vector crops are rejected; old boards remain readable") {
+    var board = Board(); let image = BoardImage(asset:"a.png",frame:Rect(0,0,400,200)); board.images = [image]
+    let old = try JSONEncoder().encode(board); try expect(try JSONDecoder().decode(Board.self,from:old).validated() == board)
+    for region in [Rect(0,0,0,10),Rect(0,0,-10,20),Rect(500,500,20,20),Rect(.nan,0,30,20)] { try expect(!board.cropImage(id:image.id,to:region)) }
+    board.images[0].locked = true; try expect(!board.cropImage(id:image.id,to:Rect(0,0,100,100)))
+    board.images[0].locked = false; board.images[0].vectorAsset = "math.pdf"
+    try expect(!board.cropImage(id:image.id,to:Rect(0,0,100,100)))
+    board.images[0].vectorAsset = nil; board.images[0].crop = Rect(0,0,0.5,0.5)
+    try rejects {_ = try board.validated()}; board.version = 2
+    for crop in [Rect(-0.1,0,1,1),Rect(0,0,0,1),Rect(0.8,0,0.3,1),Rect(0,0,.infinity,1)] {
+        board.images[0].crop = crop; try rejects {_ = try board.validated()}
+    }
+}
+final class PDFImageSizes { var values: [(Int,Int)] = [] }
+check("Cropped PNG/PDF exports contain only kept image pixels; editable copies retain the original") {
+    try temporaryLibrary { library in
+        let package = try library.create()
+        let context = CGContext(data:nil,width:100,height:80,bitsPerComponent:8,bytesPerRow:400,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(CGColor(red:0,green:0,blue:1,alpha:1)); context.fill(CGRect(x:0,y:0,width:100,height:80))
+        context.setFillColor(CGColor(red:0,green:1,blue:0,alpha:1)); context.fill(CGRect(x:0,y:0,width:50,height:40))
+        context.setFillColor(CGColor(red:1,green:0,blue:0,alpha:1)); context.fill(CGRect(x:0,y:40,width:50,height:40))
+        let original = NSMutableData(), destination = CGImageDestinationCreateWithData(original,"public.png" as CFString,1,nil)!
+        CGImageDestinationAddImage(destination,context.makeImage()!,nil); try expect(CGImageDestinationFinalize(destination))
+        let asset = try library.importAsset(data:original as Data,extension:"png",to:package)
+        var board = Board(); let image = BoardImage(asset:asset,frame:Rect(100,80,200,160)); board.images = [image]
+        try expect(board.cropImage(id:image.id,to:Rect(100,80,100,80)))
+        let visible = board.images[0].visibleFrame
+        let png = try BoardRenderer.png(board,package:package,region:visible)
+        let decoded = CGImageSourceCreateImageAtIndex(CGImageSourceCreateWithData(png as CFData,nil)!,0,nil)!
+        let bitmap = CGContext(data:nil,width:20,height:20,bitsPerComponent:8,bytesPerRow:80,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGBitmapInfo.byteOrder32Big.rawValue|CGImageAlphaInfo.premultipliedLast.rawValue)!
+        bitmap.draw(decoded,in:CGRect(x:0,y:0,width:20,height:20)); let bytes = bitmap.data!.assumingMemoryBound(to:UInt8.self)
+        let centre = 10*80+10*4
+        try expect(bytes[centre] > 200 && bytes[centre+1] < 80 && bytes[centre+2] < 80,"Top-left crop must remain red; RGBA=\(Array(UnsafeBufferPointer(start:bytes+centre,count:4)))")
+        let pdf = try BoardRenderer.pdf(board,package:package,region:visible), document = CGPDFDocument(CGDataProvider(data:pdf as CFData)!)!, page = document.page(at:1)!
+        var resources: CGPDFDictionaryRef?, objects: CGPDFDictionaryRef?
+        try expect(CGPDFDictionaryGetDictionary(page.dictionary!,"Resources",&resources))
+        try expect(CGPDFDictionaryGetDictionary(resources!,"XObject",&objects))
+        let sizes = PDFImageSizes()
+        CGPDFDictionaryApplyFunction(objects!, { _, object, info in
+            var stream: CGPDFStreamRef?
+            guard let info, CGPDFObjectGetValue(object,.stream,&stream), let stream else { return }
+            guard let dictionary = CGPDFStreamGetDictionary(stream) else { return }; var width: CGPDFInteger = 0, height: CGPDFInteger = 0
+            if CGPDFDictionaryGetInteger(dictionary,"Width",&width), CGPDFDictionaryGetInteger(dictionary,"Height",&height) { Unmanaged<PDFImageSizes>.fromOpaque(info).takeUnretainedValue().values.append((width,height)) }
+        }, Unmanaged.passUnretained(sizes).toOpaque())
+        try expect(sizes.values.count == 1 && sizes.values[0].0 == 50 && sizes.values[0].1 == 40,"PDF must embed the cropped pixels rather than a clipped full image")
+        let copy = try library.copy(board,from:package,name:"Cropped copy")
+        try expect(try Data(contentsOf:copy.appendingPathComponent("assets").appendingPathComponent(asset)) == original as Data)
+        var reopened = try library.load(copy); _ = reopened.cropImage(id:image.id,to:nil)
+        try expect(reopened.images[0].frame == image.frame)
+        if let output = ProcessInfo.processInfo.environment["WHITEBOARD_TEST_ARTIFACTS"] {
+            let folder = URL(fileURLWithPath:output); try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:true)
+            try png.write(to:folder.appendingPathComponent("crop-check.png")); try pdf.write(to:folder.appendingPathComponent("crop-check.pdf"))
+        }
+    }
+}
+check("A simulated full disk during either save write preserves the current board and permits retry") {
+    try temporaryLibrary { initial in
+        let package = try initial.create(); let before = try Data(contentsOf:package.appendingPathComponent("board.json"))
+        var failureTarget: String?
+        let library = try Library(root:initial.root,atomicWrite:{data,url in
+            if url.lastPathComponent == failureTarget { throw NSError(domain:NSCocoaErrorDomain,code:NSFileWriteOutOfSpaceError) }
+            try data.write(to:url,options:.atomic)
+        })
+        var board = try library.load(package); board.texts = [BoardText(text:"Keep this even when a save fails",origin:Point(10,10))]
+        for target in ["previous.json","board.json"] {
+            failureTarget = target; try rejects {try library.save(board,at:package)}
+            try expect(try Data(contentsOf:package.appendingPathComponent("board.json")) == before)
+        }
+        failureTarget = nil; try library.save(board,at:package); try expect(try library.load(package) == board)
+        try expect(try Data(contentsOf:package.appendingPathComponent("previous.json")) == before)
+    }
+}
+check("Failed creation and failed image writes leave existing ideas intact") {
+    try temporaryLibrary { initial in
+        let original = try initial.create(); let before = try Data(contentsOf:original.appendingPathComponent("board.json"))
+        let library = try Library(root:initial.root,atomicWrite:{_,_ in throw NSError(domain:NSCocoaErrorDomain,code:NSFileWriteOutOfSpaceError)})
+        try rejects {_ = try library.create(name:"Cannot save")}
+        try expect(try library.list().count == 1)
+        try rejects {_ = try library.importAsset(data:Data([1,2,3]),extension:"png",to:original)}
+        try expect(try FileManager.default.contentsOfDirectory(atPath:original.appendingPathComponent("assets").path).isEmpty)
+        try expect(try Data(contentsOf:original.appendingPathComponent("board.json")) == before)
+    }
+}
 if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
     check("Real LaTeX rendering preserves editable source and vector assets through copy/reopen") {
         try temporaryLibrary { library in

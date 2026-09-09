@@ -1,3 +1,18 @@
+# Whiteboard 0.4.0 · crop, restore and return
+
+- Select a screenshot and press C to crop it. Drag the area to keep, then Return or Apply crop. Escape cancels. Edit → Restore full image restores the original. Crop edits support undo and survive save/reopen, copying, movement and resizing with attached ink.
+- PNG and PDF content exports use the retained image region. Editable board files keep the full original asset. Cropping affects the image only; separate ink outside its bounds remains visible. LaTeX/TikZ vector objects are not cropped.
+- Hold Command–Shift–Space to temporarily hide the board and use the app underneath; release to return. The shortcut is registered only while the board is visible, uses press/release events and adds no keyboard monitor or polling loop. Normal show/hide remains a recovery route.
+- Saving now has executable fault-injection coverage for simulated full-disk failures during current/previous metadata writes, creation and asset import. Failed writes preserve existing saved content; a retry succeeds after the injected failure is lifted. Oversized metadata is rejected before writing.
+
+**36 local checks pass: 33 core and 3 real LaTeX/TikZ checks.** Native interaction verified cropping, resize with attached ink, undo, reopening a saved crop, restoring the full image and cancelling a crop. A physical held-key test while clicking/scrolling another app, shortcut conflicts and sleep/wake still require dedicated testing.
+
+Cropped boards use document format version 2 and require Whiteboard 0.4 or later. Existing version 1 boards remain readable. Cropping is reversible editing, not removal of private pixels from editable files. [Crop details](CROPPING.md).
+
+**GitHub preview for Apple silicon; ad-hoc signed, not Apple-notarised.** The four editable demos require no TeX installation. Rendering new LaTeX/TikZ objects requires local TeX. The complete framework is still in progress; [feature status](IMPLEMENTATION.md), [demos](DEMOS.md) and [validation](VALIDATION.md) describe the exact limits.
+
+---
+
 # Whiteboard 0.3.0 · shapes, shelf and an editable demo
 
 - Sketch naturally with Auto shapes enabled: clear lines, arrows, rectangles, circles and ellipses snap at pen-up. Undo restores the original stroke; Shift keeps one stroke freehand. Recognition is geometric and local, conservatively skips ambiguous input, and never runs as a background service.
