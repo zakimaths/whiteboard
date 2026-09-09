@@ -2,6 +2,7 @@
 
 Ready-to-use public materials:
 
+- [LinkedIn attachment](demos/whiteboard-linkedin.png): 3200 × 2040 native app preview with the actual shelf, controls, editable heat-equation objects, TikZ plot and sample annotations. Rendered from the 0.7.1 application views in light appearance with a prepared fictional board; no personal workspace or desktop content is included.
 - [Everyday idea board](demos/an-idea-before-it-disappears.png): the app's general-purpose starting point.
 - [Heat diffusion](demos/pde-heat.png), [wave motion](demos/pde-wave.png) and [Poisson field](demos/pde-poisson.png): optional GitHub showcase boards with typeset equations and diagrams.
 - [Repository](https://github.com/zakimaths/whiteboard), [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.1) and [demo walkthrough](DEMOS.md).
