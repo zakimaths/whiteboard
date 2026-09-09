@@ -1,3 +1,20 @@
+# Whiteboard 0.3.0 · shapes, shelf and an editable demo
+
+- Sketch naturally with Auto shapes enabled: clear lines, arrows, rectangles, circles and ellipses snap at pen-up. Undo restores the original stroke; Shift keeps one stroke freehand. Recognition is geometric and local, conservatively skips ambiguous input, and never runs as a background service.
+- Explicit tools also draw lines, arrows, rectangles and ellipses. Hold Shift for 45° angles or equal sides; Escape cancels a shape in progress. Shapes use the existing ink format, including undo, screenshot attachment and exports.
+- Pin shelf ideas and move them earlier or later within their pinned/unpinned group. Preferences survive restarts and in-app filename/status changes.
+- Click Demo for four editable fictional examples in a separate library. My ideas restores the previous personal board. Demo edits persist without duplicating samples on each visit.
+- Finished ideas show a Reopen action. The background control shows Desktop, Paper or Dim; the pen-width control restores the saved width.
+- File URLs now retain consistent package identity after creation, directory enumeration, rename and status moves.
+
+LaTeX/TikZ source editing remains available. These additions introduce no continuous rendering, thumbnail decoding or polling service. Recognition examines at most 20,000 input points, resamples to 128, and fits only once per completed pen stroke. Shape previews update on pointer/modifier events; shelf preferences are small per-library data; demo assets load only when requested.
+
+**GitHub distribution only.** The Apple silicon app is ad-hoc signed and not notarised. No App Store submission, accounts or subscription. The sample ZIP and in-app demo do not require TeX; rendering new LaTeX/TikZ objects requires a local installation. Pin preferences currently live on the Mac, and are not transported with library files or migrated after external Finder renames.
+
+This remains a working preview. [Full feature status](IMPLEMENTATION.md), [demo access](DEMOS.md), [validation](VALIDATION.md).
+
+---
+
 # Whiteboard 0.2.0 · native preview
 
 A small desktop whiteboard for ideas, screenshots and working things out. This preview develops the core writing, saving and returning-to-an-idea loop. The full feature framework remains in the implementation checklist.

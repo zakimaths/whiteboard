@@ -7,6 +7,7 @@ public struct ShelfItem: Equatable {
     public var status: IdeaStatus
     public var modified: Date
     public var title: String { url.deletingPathExtension().lastPathComponent }
+    public init(url: URL, status: IdeaStatus, modified: Date) { self.url = url; self.status = status; self.modified = modified }
 }
 
 // All operations are run on the application's single storage queue.
@@ -34,7 +35,7 @@ public final class Library {
             result = folder(status).appendingPathComponent("\(base) \(suffix)").appendingPathExtension("whiteboard")
             suffix += 1
         }
-        return result
+        return URL(fileURLWithPath:result.path,isDirectory:true)
     }
     public func create(name: String = "Untitled idea", board: Board = Board()) throws -> URL {
         let url = availableURL(name: name, status: .unfinished)
@@ -49,7 +50,10 @@ public final class Library {
             for url in try fm.contentsOfDirectory(at: folder(status), includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) where url.pathExtension == "whiteboard" {
                 let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .contentModificationDateKey])
                 guard values.isDirectory == true, values.isSymbolicLink != true else { continue }
-                result.append(ShelfItem(url: url, status: status, modified: values.contentModificationDate ?? .distantPast))
+                // Directory enumeration may resolve /var to /private/var. Keep the
+                // chosen root's spelling so file identity matches create/move/load.
+                let itemURL = folder(status).appendingPathComponent(url.lastPathComponent,isDirectory:true)
+                result.append(ShelfItem(url: itemURL, status: status, modified: values.contentModificationDate ?? .distantPast))
             }
         }
         return result.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
@@ -92,7 +96,7 @@ public final class Library {
     public func move(_ url: URL, to status: IdeaStatus, name: String? = nil) throws -> URL {
         if url.deletingLastPathComponent() == folder(status), name == nil { return url }
         let title = name ?? url.deletingPathExtension().lastPathComponent
-        let candidate = folder(status).appendingPathComponent(Self.safeName(title)).appendingPathExtension("whiteboard")
+        let candidate = URL(fileURLWithPath:folder(status).appendingPathComponent(Self.safeName(title)).appendingPathExtension("whiteboard").path,isDirectory:true)
         if candidate == url { return url }
         let destination = availableURL(name: title, status: status)
         try fm.moveItem(at: url, to: destination)

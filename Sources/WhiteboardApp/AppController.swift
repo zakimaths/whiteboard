@@ -38,6 +38,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var hotKey: HotKey?
     var watches: [DirectoryWatch] = []
     var items: [ShelfItem] = []
+    var shelfOrder = ShelfOrder()
     var activeURL: URL?
     var revision = 0, savedRevision = 0
     var dirtySince: TimeInterval?
@@ -53,9 +54,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var shelfPage = 0
     var libraryGeneration = 0
     var toolButtons: [DrawingTool: NSButton] = [:]
+    var penWidthControl: NSButton?
+    var finishControl: NSButton?
+    var backgroundControl: NSButton?
+    var automaticShapesControl: NSButton?
     var onScreen: CGDirectDisplayID?
     var isBusy = false { didSet { canvas.acceptsInput = !isBusy } }
     var memoryPressure: DispatchSourceMemoryPressure?
+    var demoRoot: URL { FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("Whiteboard/Demo Ideas",isDirectory:true) }
+    var isDemo: Bool { library?.root.standardizedFileURL == demoRoot.standardizedFileURL }
     var root: URL {
         let args = ProcessInfo.processInfo.arguments
         if let i = args.firstIndex(of: "--library"), args.indices.contains(i+1) { return URL(fileURLWithPath: args[i+1], isDirectory: true) }
@@ -69,13 +76,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         hotKey = HotKey { [weak self] in self?.toggleBoard() }
         canvas.colour = UserDefaults.standard.string(forKey:"penColour") ?? "ink"
         let width = UserDefaults.standard.double(forKey:"penWidth"); if (1...12).contains(width) { canvas.penWidth = width }
+        canvas.automaticShapes = UserDefaults.standard.object(forKey:"automaticShapes") == nil || UserDefaults.standard.bool(forKey:"automaticShapes")
+        automaticShapesControl?.state = canvas.automaticShapes ? .on : .off
         if hotKey?.registered != true { statusItem.button?.toolTip = "Whiteboard · shortcut unavailable; use this menu to open" }
         NotificationCenter.default.addObserver(self, selector: #selector(displaysChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(willSleep), name: NSWorkspace.willSleepNotification, object: nil)
         memoryPressure = DispatchSource.makeMemoryPressureSource(eventMask: [.warning,.critical], queue: .main)
         memoryPressure?.setEventHandler { [weak self] in self?.canvas.images.clear() }; memoryPressure?.resume()
-        openLibrary(root)
+        openLibrary(ProcessInfo.processInfo.arguments.contains("--demo") ? demoRoot : root)
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if window != nil { showBoard() }
@@ -87,9 +96,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         appMenu.addItem(withTitle: "Quit Whiteboard", action: #selector(quit), keyEquivalent: "q").target = self
         appItem.submenu = appMenu; main.addItem(appItem)
         let fileMenu = NSMenu(title:"File")
-        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Try sample ideas",#selector(trySamples),"")] {
+        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Open demo workspace",#selector(trySamples),"")] {
             fileMenu.addItem(withTitle:title,action:action,keyEquivalent:key).target = self
         }
+        fileMenu.addItem(withTitle:"Return to my ideas",action:#selector(returnToIdeas),keyEquivalent:"").target = self
         fileItem.submenu = fileMenu; main.addItem(fileItem)
         let edit = NSMenu(title: "Edit")
         for (title,action,key) in [("Cut",#selector(NSText.cut(_:)),"x"),("Copy",#selector(NSText.copy(_:)),"c"),("Paste",#selector(NSText.paste(_:)),"v"),("Select All",#selector(NSText.selectAll(_:)),"a")] {
@@ -101,6 +111,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         edit.addItem(withTitle:"Duplicate selection",action:#selector(duplicateSelection),keyEquivalent:"d").target = self
         edit.addItem(withTitle:"Fresh copy without annotations",action:#selector(duplicateReference),keyEquivalent:"").target = self
         edit.addItem(withTitle:"Fit all content",action:#selector(fitContent),keyEquivalent:"1").target = self
+        let shapes = NSMenuItem(title:"Drawing shapes",action:nil,keyEquivalent:"")
+        shapes.submenu = shapeMenu(); edit.addItem(shapes)
         editItem.submenu = edit; main.addItem(editItem); NSApp.mainMenu = main
     }
     private func makeWindow() {
@@ -138,6 +150,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let spacer = NSView(); spacer.setContentHuggingPriority(.defaultLow, for: .horizontal); header.addArrangedSubview(spacer)
         saveLabel.font = .systemFont(ofSize: 11); saveLabel.textColor = .secondaryLabelColor; header.addArrangedSubview(saveLabel)
         header.addArrangedSubview(button("New", #selector(newIdea), symbol: "plus"))
+        header.addArrangedSubview(button(isDemo ? "My ideas" : "Demo",isDemo ? #selector(returnToIdeas) : #selector(trySamples),symbol:isDemo ? "arrow.uturn.backward" : "play.circle"))
         header.addArrangedSubview(button("Screens", #selector(showScreens), symbol: "display.2"))
         header.addArrangedSubview(button(collapsed ? "Open shelf" : "Fold", #selector(toggleShelf), symbol: collapsed ? "chevron.down" : "chevron.up"))
         shelfStack.addArrangedSubview(header)
@@ -171,13 +184,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         toolbar.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(toolbar)
         let stack = NSStackView(); stack.orientation = .vertical; stack.spacing = 7
         stack.translatesAutoresizingMaskIntoConstraints = false; toolbar.addSubview(stack)
-        let symbols: [DrawingTool:String] = [.pen:"pencil.tip",.highlighter:"highlighter",.eraser:"eraser",.select:"cursorarrow",.text:"textformat",.hand:"hand.draw"]
+        let symbols: [DrawingTool:String] = [.pen:"pencil.tip",.highlighter:"highlighter",.eraser:"eraser",.select:"cursorarrow",.text:"textformat",.hand:"hand.draw",.shape:"arrow.up.right"]
         for (i,tool) in DrawingTool.allCases.enumerated() {
             let b = button("", #selector(selectTool(_:)))
             b.image = NSImage(systemSymbolName: symbols[tool]!, accessibilityDescription: tool.rawValue.capitalized)
             b.setButtonType(.pushOnPushOff); b.toolTip = tool.rawValue.capitalized; b.setAccessibilityLabel(tool.rawValue.capitalized); b.tag = i
             b.widthAnchor.constraint(equalToConstant: 36).isActive = true; b.heightAnchor.constraint(equalToConstant: 31).isActive = true
             stack.addArrangedSubview(b); toolButtons[tool] = b
+            if tool == .shape { b.menu = shapeMenu() }
         }
         let capture = button("",#selector(captureScreenshot),symbol:"camera.viewfinder")
         capture.setAccessibilityLabel("Capture screenshot"); capture.toolTip = "Capture screenshot"; stack.addArrangedSubview(capture)
@@ -190,6 +204,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             b.widthAnchor.constraint(equalToConstant: 36).isActive = true; stack.addArrangedSubview(b)
         }
         let widthButton = button("3 pt",#selector(cycleWidth)); widthButton.identifier = NSUserInterfaceItemIdentifier("pen-width"); widthButton.toolTip = "Cycle pen width"; stack.addArrangedSubview(widthButton)
+        penWidthControl = widthButton
         stack.addArrangedSubview(button("↶", #selector(undo), symbol: nil))
         stack.addArrangedSubview(button("↷", #selector(redo), symbol: nil))
         NSLayoutConstraint.activate([
@@ -202,9 +217,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         row.addArrangedSubview(button("−",#selector(zoomOut))); zoomLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         row.addArrangedSubview(zoomLabel); row.addArrangedSubview(button("+",#selector(zoomIn)))
         row.addArrangedSubview(button("Fit",#selector(fitContent)))
+        let automatic = NSButton(checkboxWithTitle:"Auto shapes",target:self,action:#selector(toggleAutomaticShapes(_:)))
+        automatic.state = .on; automatic.font = .systemFont(ofSize:11)
+        automatic.toolTip = "Sketch a shape with the pen. It snaps when you lift. Undo restores your ink; hold Shift to keep a stroke freehand."
+        automaticShapesControl = automatic; row.addArrangedSubview(automatic)
         row.addArrangedSubview(button("Fresh space",#selector(freshSpace),symbol: "arrow.down"))
-        row.addArrangedSubview(button("Paper",#selector(cycleBackground),symbol: "square.on.square"))
-        row.addArrangedSubview(button("Finish",#selector(finishIdea),symbol: "checkmark"))
+        let background = button("Desktop",#selector(cycleBackground),symbol:"square.on.square")
+        backgroundControl = background; row.addArrangedSubview(background)
+        let finish = button("Finish",#selector(finishIdea),symbol:"checkmark")
+        finishControl = finish; row.addArrangedSubview(finish)
         row.addArrangedSubview(button("Export",#selector(exportPNG),symbol: "square.and.arrow.up"))
         row.addArrangedSubview(button("Hide",#selector(hideBoard),symbol: "eye.slash"))
         NSLayoutConstraint.activate([
@@ -215,6 +236,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         updateTool()
     }
     private func configureCanvas() {
+        canvas.onRecognition = { [weak self] name in
+            self?.automaticShapesControl?.title = "Auto shapes · "+name
+            self?.automaticShapesControl?.setAccessibilityLabel("Auto shapes. Recognised "+name+". Undo restores the original ink.")
+        }
         canvas.onEditTeX = { [weak self] id in self?.editTeX(id) }
         canvas.onToolChange = { [weak self] in self?.updateTool() }
         canvas.onCopy = { [weak self] in self?.copySelection() }
@@ -232,13 +257,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             do {
                 let library = try Library(root: root)
                 var items = try library.list()
-                if items.isEmpty { _ = try library.create(); items = try library.list() }
+                if items.isEmpty {
+                    if root.standardizedFileURL == self.demoRoot.standardizedFileURL { try DemoContent.populate(library) }
+                    else { _ = try library.create() }
+                    items = try library.list()
+                }
                 DispatchQueue.main.async {
                     guard generation == self.libraryGeneration else { return }
                     self.library = library; self.items = items
+                    self.shelfOrder = UserDefaults.standard.data(forKey:"shelfOrder:"+library.root.path).flatMap {try? JSONDecoder().decode(ShelfOrder.self,from:$0)} ?? ShelfOrder()
                     self.watches = IdeaStatus.allCases.compactMap { DirectoryWatch(url: library.folder($0)) { [weak self] in self?.scheduleRefresh() } }
-                    self.isBusy = false; self.rebuildCards()
-                    UserDefaults.standard.set(root.path,forKey:"libraryRoot")
+                    self.isBusy = false; self.shelfPage = 0; self.buildShelf()
+                    if !self.isDemo { UserDefaults.standard.set(root.path,forKey:"libraryRoot") }
                     let lastPath = UserDefaults.standard.string(forKey:"lastBoard:"+library.root.path)
                     if let first = items.first(where: {$0.url.path == lastPath}) ?? items.first(where: {$0.status == .unfinished}) ?? items.first(where: {$0.status == .finished}) ?? items.first { self.loadIdea(first.url) }
                 }
@@ -264,10 +294,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         for view in cards.arrangedSubviews { cards.removeArrangedSubview(view); view.removeFromSuperview() }
         let status = IdeaStatus.allCases[max(0,min(2,statusControl?.selectedSegment ?? 0))]
         let query = search.stringValue
-        let matching = items.filter { $0.status == status && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) }
+        let matching = shelfOrder.sorted(items.filter { $0.status == status && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) })
         shelfPage = min(shelfPage,max(0,(matching.count-1)/100))
         for item in matching.dropFirst(shelfPage*100).prefix(100) {
             let b = button((status == .finished ? "✓  " : status == .unfinished ? "●  " : "  ")+item.title, #selector(openCard(_:)))
+            let pinned = shelfOrder.pinned.contains(ShelfOrder.key(item))
+            if pinned {
+                b.image = NSImage(systemSymbolName:"pin.fill",accessibilityDescription:"Pinned")
+                b.image?.size = NSSize(width:12,height:12); b.imagePosition = .imageLeading
+            }
             b.identifier = NSUserInterfaceItemIdentifier(item.url.path)
             b.contentTintColor = status == .finished ? .systemGreen : status == .unfinished ? .systemRed : .secondaryLabelColor
             b.isBordered = false; b.wantsLayer = true
@@ -279,10 +314,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             b.attributedAlternateTitle = b.attributedTitle
             b.heightAnchor.constraint(equalToConstant:30).isActive = true
             b.toolTip = "\(item.title) — \(status.rawValue)\nClick to reopen. Control-click for file actions."
-            b.setAccessibilityLabel("\(item.title), \(status.rawValue)")
+            b.setAccessibilityLabel("\(item.title), \(status.rawValue)"+(shelfOrder.pinned.contains(ShelfOrder.key(item)) ? ", pinned" : ""))
             b.state = item.url == activeURL ? .on : .off
             b.menu = cardMenu(item)
-            b.widthAnchor.constraint(equalToConstant:min(250,max(100,b.attributedTitle.size().width+8))).isActive = true
+            b.widthAnchor.constraint(equalToConstant:min(250,max(100,b.attributedTitle.size().width+(pinned ? 26 : 8)))).isActive = true
             cards.addArrangedSubview(b)
         }
         if matching.count > 100 {
@@ -298,7 +333,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         cards.layoutSubtreeIfNeeded(); cards.setFrameSize(NSSize(width: max(300,cards.fittingSize.width),height: 36))
     }
     private func cardMenu(_ item: ShelfItem) -> NSMenu {
-        let menu = NSMenu()
+        let menu = NSMenu(); menu.autoenablesItems = false
+        let pin = NSMenuItem(title:shelfOrder.pinned.contains(ShelfOrder.key(item)) ? "Unpin idea" : "Pin idea",action:#selector(pinCard(_:)),keyEquivalent:"")
+        pin.target = self; pin.representedObject = item.url; menu.addItem(pin)
+        for (title,offset) in [("Move earlier",-1),("Move later",1)] {
+            let action = NSMenuItem(title:title,action:#selector(reorderCard(_:)),keyEquivalent:"")
+            action.target = self; action.representedObject = item.url; action.tag = offset
+            var preview = shelfOrder; action.isEnabled = preview.move(item,by:offset,among:items)
+            menu.addItem(action)
+        }
+        menu.addItem(.separator())
         for status in IdeaStatus.allCases where status != item.status {
             let action = NSMenuItem(title: "Move to \(status.rawValue)", action: #selector(moveCard(_:)), keyEquivalent: "")
             action.target = self; action.representedObject = [item.url.path,status.rawValue]; menu.addItem(action)
@@ -306,6 +350,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         let reveal = NSMenuItem(title: "Show in Finder", action: #selector(revealCard(_:)), keyEquivalent: "")
         reveal.target = self; reveal.representedObject = item.url; menu.addItem(reveal)
         return menu
+    }
+    private func saveShelfOrder() {
+        if let data = try? JSONEncoder().encode(shelfOrder) { UserDefaults.standard.set(data,forKey:"shelfOrder:"+library.root.path) }
+        rebuildCards()
+    }
+    @objc private func pinCard(_ sender: NSMenuItem) {
+        guard !isBusy, let url = sender.representedObject as? URL, let item = items.first(where: {$0.url == url}) else { return }
+        shelfOrder.togglePin(item); shelfPage = 0; saveShelfOrder()
+    }
+    @objc private func reorderCard(_ sender: NSMenuItem) {
+        guard !isBusy, let url = sender.representedObject as? URL, let item = items.first(where: {$0.url == url}) else { return }
+        if shelfOrder.move(item,by:sender.tag,among:items) { saveShelfOrder() }
     }
     @objc private func openCard(_ sender: NSButton) {
         guard let path = sender.identifier?.rawValue else { return }
@@ -318,7 +374,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 let board = try self.library.load(url)
                 DispatchQueue.main.async {
                     self.activeURL = url; self.revision = 0; self.savedRevision = 0; self.dirtySince = nil; self.saveBlocked = false
-                    self.canvas.load(board, at: url); UserDefaults.standard.set(url.path,forKey:"lastBoard:"+self.library.root.path); self.isBusy = false; self.updateLabels(); self.rebuildCards()
+                    self.canvas.load(board, at: url); UserDefaults.standard.set(url.path,forKey:"lastBoard:"+self.library.root.path); self.isBusy = false
+                    self.statusControl?.selectedSegment = IdeaStatus.allCases.firstIndex(where: {$0.rawValue == url.deletingLastPathComponent().lastPathComponent}) ?? 0
+                    self.automaticShapesControl?.title = "Auto shapes"; self.automaticShapesControl?.setAccessibilityLabel("Auto shapes")
+                    self.updateLabels(); self.rebuildCards()
                 }
             } catch { DispatchQueue.main.async { self.isBusy = false; self.showError(error) } }
         }
@@ -367,6 +426,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         titleLabel.stringValue = activeURL?.deletingPathExtension().lastPathComponent ?? "Whiteboard"
         saveLabel.stringValue = saveBlocked ? "Save a copy" : savedRevision == revision ? "Saved locally" : "Saving…"
         zoomLabel.stringValue = "\(Int(canvas.board.viewport.zoom*100))%"
+        if isDemo { saveLabel.stringValue = "Demo · "+saveLabel.stringValue }
+        penWidthControl?.title = "\(canvas.penWidth.formatted()) pt"
+        let finished = activeURL?.deletingLastPathComponent().lastPathComponent == IdeaStatus.finished.rawValue
+        finishControl?.title = finished ? "Reopen" : "Finish"
+        finishControl?.setAccessibilityLabel(finished ? "Reopen idea" : "Finish idea")
+        finishControl?.image = NSImage(systemSymbolName:finished ? "arrow.uturn.backward" : "checkmark",accessibilityDescription:nil)
+        backgroundControl?.title = ["paper":"Paper","dim":"Dim","transparent":"Desktop"][canvas.board.background] ?? "Desktop"
+        backgroundControl?.setAccessibilityLabel("Background: "+(backgroundControl?.title ?? "Desktop"))
+        backgroundControl?.toolTip = "Change background: desktop, paper or dim"
     }
     private func importImage(_ data: Data, ext: String, at point: Point) {
         guard let url = activeURL, !isBusy, data.count <= 32*1024*1024 else { return }
@@ -413,8 +481,35 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     @objc func nextShelfPage() { shelfPage += 1; rebuildCards() }
     @objc func previousShelfPage() { shelfPage = max(0,shelfPage-1); rebuildCards() }
     func controlTextDidChange(_ obj: Notification) { shelfPage = 0; rebuildCards() }
-    @objc func selectTool(_ sender: NSButton) { canvas.tool = DrawingTool.allCases[sender.tag]; updateTool() }
-    private func updateTool() { for (tool,button) in toolButtons { button.state = canvas.tool == tool ? .on : .off } }
+    @objc func selectTool(_ sender: NSButton) {
+        if DrawingTool.allCases[sender.tag] == .shape {
+            shapeMenu().popUp(positioning:nil,at:NSPoint(x:sender.bounds.maxX+4,y:sender.bounds.midY),in:sender)
+        } else { canvas.tool = DrawingTool.allCases[sender.tag] }
+        updateTool()
+    }
+    private func shapeMenu() -> NSMenu {
+        let menu = NSMenu()
+        for (i,shape) in DrawingShape.allCases.enumerated() {
+            let title = ["Line  ·  L","Arrow  ·  A","Rectangle  ·  R","Ellipse  ·  O"][i]
+            let item = NSMenuItem(title:title,action:#selector(selectShape(_:)),keyEquivalent:"")
+            item.target = self; item.tag = i; item.state = canvas.tool == .shape && canvas.shape == shape ? .on : .off; menu.addItem(item)
+        }
+        menu.addItem(.separator()); let hint = NSMenuItem(title:"Hold Shift for equal sides or 45° angles",action:nil,keyEquivalent:""); hint.isEnabled = false; menu.addItem(hint)
+        return menu
+    }
+    @objc private func selectShape(_ sender: NSMenuItem) { canvas.finishGesture(); canvas.shape = DrawingShape.allCases[sender.tag]; canvas.tool = .shape }
+    @objc private func toggleAutomaticShapes(_ sender: NSButton) {
+        canvas.finishGesture(); canvas.automaticShapes = sender.state == .on
+        sender.title = "Auto shapes"; sender.setAccessibilityLabel("Auto shapes")
+        UserDefaults.standard.set(canvas.automaticShapes,forKey:"automaticShapes")
+    }
+    private func updateTool() {
+        for (tool,button) in toolButtons { button.state = canvas.tool == tool ? .on : .off }
+        let symbols: [DrawingShape:String] = [.line:"line.diagonal",.arrow:"arrow.up.right",.rectangle:"rectangle",.ellipse:"oval"]
+        toolButtons[.shape]?.image = NSImage(systemSymbolName:symbols[canvas.shape]!,accessibilityDescription:"Shapes: "+canvas.shape.rawValue)
+        toolButtons[.shape]?.setAccessibilityLabel("Shapes: "+canvas.shape.rawValue)
+        toolButtons[.shape]?.toolTip = "Shapes · L line, A arrow, R rectangle, O ellipse. Shift constrains."
+    }
     @objc func selectColour(_ sender: NSButton) { canvas.colour = ["ink","blue","red","green"][sender.tag]; UserDefaults.standard.set(canvas.colour,forKey:"penColour") }
     @objc func cycleWidth(_ sender: NSButton) {
         let widths = [1.5,3.0,6.0,10.0]; canvas.penWidth = widths.first(where: {$0 > canvas.penWidth}) ?? widths[0]
@@ -432,6 +527,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     @objc func cycleBackground() {
         let options = ["transparent","paper","dim"], current = options.firstIndex(of: canvas.board.background) ?? 0
         canvas.setBackground(options[(current+1)%options.count])
+        updateLabels()
     }
     @objc func lockImage() {
         canvas.checkpoint()
@@ -474,6 +570,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             do {
                 let destination = try self.library.move(url,to:status,name:name)
                 DispatchQueue.main.async {
+                    if let old = self.items.first(where: {$0.url == url}) {
+                        var new = old; new.url = destination; new.status = status
+                        self.shelfOrder.relocate(from:old,to:new); self.saveShelfOrder()
+                    }
                     if self.activeURL == url { self.activeURL = destination; self.statusControl?.selectedSegment = IdeaStatus.allCases.firstIndex(of:status) ?? 0; self.canvas.packageURL = destination; self.canvas.images.clear(); UserDefaults.standard.set(destination.path,forKey:"lastBoard:"+self.library.root.path); self.updateLabels() }
                     self.isBusy = false; self.refreshShelf()
                 }
@@ -665,17 +765,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         }
     }
     @objc func trySamples() {
-        afterSaving {
-            self.isBusy = true
-            self.io.async {
-                let result = Result { try DemoContent.populate(self.library) }
-                DispatchQueue.main.async {
-                    self.isBusy = false
-                    switch result { case .success(let url): self.loadIdea(url); self.refreshShelf()
-                    case .failure(let error): self.showError(error) }
-                }
-            }
-        }
+        guard !isDemo else { return }
+        afterSaving { self.openLibrary(self.demoRoot) }
+    }
+    @objc func returnToIdeas() {
+        guard isDemo else { return }
+        afterSaving { self.openLibrary(self.root) }
     }
     @objc func captureScreenshot() {
         guard !isBusy, activeURL != nil else { return }
@@ -699,8 +794,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         alert.addButton(withTitle:"OK"); alert.runModal()
     }
     @objc func showHelp() {
-        let alert = NSAlert(); alert.messageText = "Whiteboard · first native build"
-        alert.informativeText = "⇧⌘B show / hide\nP pen · H highlighter · E eraser · V select · T text\nRight-drag erases ink. Scroll for more space.\nPinch or ⌘ scroll to zoom. Option-drag pans.\n⌘Z undo · ⇧⌘Z redo · ⌘V paste · Return rename\n\nSelect images or ink to move them. Drag an image’s bottom-right handle to resize its annotations together. ⌘D duplicates; ⌘1 fits all content; ⌘C copies a selection as PNG. Control-click a shelf file for status and archive actions.\n\nAutosaves after edits. Recognition, thumbnails and drag-to-status are planned; see docs/IMPLEMENTATION.md."
+        let alert = NSAlert(); alert.messageText = "Whiteboard · native preview"
+        alert.informativeText = "⇧⌘B show / hide\nP pen · H highlighter · E eraser · V select · T text\nAuto shapes: draw with the pen and lift to recognise. Undo restores the original ink.\nHold Shift with the pen to keep freehand, or turn Auto shapes off.\nL line · A arrow · R rectangle · O ellipse\nHold Shift for equal sides or 45° angles. Escape cancels a shape.\nRight-drag erases ink. Scroll for more space.\nPinch or ⌘ scroll to zoom. Option-drag pans.\n⌘Z undo · ⇧⌘Z redo · ⌘V paste · Return rename\n\nSelect images or ink to move them. Drag an image’s bottom-right handle to resize its annotations together. ⌘D duplicates; ⌘1 fits all content; ⌘C copies a selection as PNG. Control-click a shelf file to pin, reorder, change status or archive. Demo opens a separate editable sample workspace; My ideas brings you back.\n\nAutosaves after edits. Handwriting transcription, thumbnails and drag-to-status are planned; see docs/IMPLEMENTATION.md."
         alert.addButton(withTitle:"Got it"); alert.runModal()
     }
     @objc func quit() { NSApp.terminate(nil) }

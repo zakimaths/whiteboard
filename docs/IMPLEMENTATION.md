@@ -19,7 +19,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 13 | Whole board on shelf | Built: every saved board is a shelf file |
 | 14 | Resume content and view | Built: reopens ink, text, images and viewport |
 | 15 | Drag between statuses | Partial: button/menu status moves work; direct drag is next |
-| 16 | Pin and rearrange | Next |
+| 16 | Pin and rearrange | Built: Control-click to pin, move earlier/later; order retained per library across launches and in-app rename/status moves. Direct dragging and portable preferences next |
 | 17 | Search titles and recognised text | Partial: filename search; recognised-content indexing is next |
 | 18 | Quiet storage | Built: no reminders, deadlines or streaks |
 | 19 | Archive and recover | Partial: Archive folder and return-to-status actions; deleted-item recovery is next |
@@ -43,7 +43,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 37 | Quick title | Built: Return opens filename rename; remapping next |
 | 38 | Double-click clear | Next: current clear-ink action is explicit and undoable |
 | 39 | Movable compact toolbar | Partial: compact tools exist; toolbar dragging/capture button next |
-| 40 | Drawing helpers | Next: initial tools are freehand ink and highlighter |
+| 40 | Drawing helpers | Built: automatic freehand line/arrow/rectangle/circle/ellipse recognition at pen-up, with original-ink Undo and an off switch; explicit tools and Shift constraints also available. Multi-stroke recognition and broader shape vocabulary remain future work |
 | 41 | Navigation | Partial: pan, zoom, reset, fresh space and fit-all; last-view history next |
 | 42 | Select and organise | Partial: selection, moving, screenshot resizing, locking and duplication; grouping next |
 | 43 | Separate clears | Partial: selection delete and clear ink; clear-everything control next |

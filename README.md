@@ -8,14 +8,17 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.2.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.3.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
 - Immediate drawing and typing on a transparent, dimmed or paper board.
 - Scroll for more room, pan, pinch to zoom, or fit all content.
+- Automatic shapes: sketch a line, arrow, box, circle or ellipse with the pen and it snaps when you lift. Undo restores your original ink. Recognition stays local and runs only at pen-up.
+- Explicit shape tools are also available, with Shift constraints and the same undo/save/export behaviour as ink.
 - Drop or paste screenshots; select, move, resize and annotate them. Attached ink follows the image.
 - A collapsible top shelf whose buttons read real filenames. Red is unfinished, green is finished; labels and symbols accompany the colours.
+- Pin important ideas and move them earlier or later on the shelf. Preferences stay separate for each library.
 - Local autosave, save/reopen, copies, archive, and recovery of the previous saved revision as a separate file.
 - LaTeX and TikZ source editing, bounded image previews and vector PDF assets. No typesetting process remains running between renders.
 - Content or selection export to PNG/PDF; copy an annotated selection as PNG; export a workspace preview with the desktop excluded.
@@ -27,12 +30,19 @@ This is a working preview, not the complete 84-feature product. Thumbnail cards,
 
 Unzip the download and open **Whiteboard.app**. A pencil icon appears in the macOS menu bar. The preview is ad-hoc signed, **not notarised by Apple**; macOS may require an explicit allowance in Privacy & Security for a downloaded copy. Building locally is also supported.
 
-Choose **File → Try sample ideas** to explore fictional examples. Every sample is a normal editable board. Existing ideas are preserved.
+Click **Demo** on the shelf, or choose **File → Open demo workspace**. Four editable examples open in a separate demo library. Click **My ideas** to return to your previous board. Demo edits persist; reopening the demo does not create duplicate samples. No account or TeX installation is needed for these four examples.
+
+To look around without installing anything, [view the public demos](docs/DEMOS.md). Distribution is through GitHub; there is no App Store listing.
 
 | Action | Control |
 | --- | --- |
 | Show / hide | Shift–Command–B or the menu-bar control |
 | Pen / highlighter / eraser / select / text | P / H / E / V / T |
+| Automatic shape recognition | Draw with the pen; Auto shapes is on by default |
+| Keep original handwriting | Undo a snap; hold Shift for a stroke, or turn off Auto shapes |
+| Line / arrow / rectangle / ellipse | L / A / R / O, or the Shapes toolbar menu |
+| Constrain a shape | Hold Shift for 45° angles, squares or circles |
+| Cancel an in-progress shape | Escape |
 | Temporary ink eraser | Right-drag |
 | More space / pan | Scroll / Option-drag |
 | Zoom | Pinch, Command-scroll, or + / − |
@@ -48,12 +58,16 @@ Choose **File → Try sample ideas** to explore fictional examples. Every sample
 | Copy selection as PNG | Command–C |
 | Undo / redo | Command–Z / Shift–Command–Z |
 | Export whole content or selection | Command–E; File menu for PDF |
-| Change status or archive | Finish button or Control-click a shelf file |
+| Pin / reorder | Control-click a shelf file → Pin, Move earlier / later |
+| Change status or archive | Finish / Reopen button or Control-click a shelf file |
+| Try / leave the demo | Demo / My ideas in the shelf |
 | Change monitor | Screens or the menu-bar display actions |
 
 ### Your files
 
 New libraries default to `~/Library/Application Support/Whiteboard/Ideas`, outside the app bundle. **File → Choose ideas folder…** selects another folder. The app creates `Unfinished`, `Finished` and `Archive` there. **Show ideas folder** in the menu bar opens it in Finder.
+
+Pins and manual order are stored in macOS preferences for each library. In-app rename and status moves retain them; external Finder renames and moving the library to another Mac do not yet carry these preferences.
 
 Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision and an `assets` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained.
 

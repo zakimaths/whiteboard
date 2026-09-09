@@ -213,6 +213,137 @@ check("PNG and PDF contain whole content, including offscreen text and source im
         try rejects { _ = try BoardRenderer.png(board,package:source) }
     }
 }
+check("Shape constraints work in every drag direction and arrows have stable heads") {
+    let start = Point(100,100)
+    for end in [Point(300,150),Point(-100,150),Point(-100,-50),Point(300,-50)] {
+        let line = DrawingShape.line.points(from:start,to:end,constrained:true)
+        let dx = line[1].x-start.x, dy = line[1].y-start.y
+        try expect(abs(dx) < 0.000001 || abs(dy) < 0.000001 || abs(abs(dx)-abs(dy)) < 0.000001)
+        let rectangle = DrawingShape.rectangle.points(from:start,to:end,constrained:true)
+        try expect(rectangle.first == rectangle.last && rectangle.count == 5)
+        try expect(abs(abs(rectangle[2].x-start.x)-abs(rectangle[2].y-start.y)) < 0.000001)
+        let circle = DrawingShape.ellipse.points(from:start,to:end,constrained:true)
+        let box = Ink(points:circle).bounds
+        try expect(circle.count == 129 && circle.first == circle.last && abs(box.width-box.height) < 0.000001)
+        let arrow = DrawingShape.arrow.points(from:start,to:end)
+        try expect(arrow[1] == end && arrow[3] == end && arrow.count == 5)
+        try expect(arrow.allSatisfy {$0.x.isFinite && $0.y.isFinite})
+    }
+    try expect(DrawingShape.arrow.points(from:start,to:start) == [start])
+}
+check("Shapes retain screenshot attachment, erasing, duplication and exports after reopening") {
+    try temporaryLibrary { library in
+        let package = try library.create()
+        var prompt = Board(); prompt.texts = [BoardText(text:"A reference",origin:Point(0,0))]
+        let asset = try library.importAsset(data:BoardRenderer.png(prompt,package:package),extension:"png",to:package)
+        var board = Board(); let image = BoardImage(asset:asset,frame:Rect(0,0,400,200)); board.images = [image]
+        let arrow = Ink(points:DrawingShape.arrow.points(from:Point(30,30),to:Point(180,100)),imageID:image.id)
+        board.ink = [arrow]; board.resizeImage(id:image.id,width:800); board.moveImage(id:image.id,by:Point(50,60))
+        try library.save(board,at:package); let reopened = try library.load(package)
+        try expect(reopened == board && reopened.ink[0].hits(Point(110,120),radius:2))
+        var duplicate = reopened; _ = duplicate.duplicate([image.id])
+        try expect(duplicate.ink.count == 2 && duplicate.ink[1].imageID == duplicate.images[1].id)
+        try expect(try BoardRenderer.png(reopened,package:package).count > 100)
+        try expect(try BoardRenderer.pdf(reopened,package:package).count > 100)
+    }
+}
+check("Shelf pinning and ordering survive serialization, renaming and status movement") {
+    try temporaryLibrary { library in
+        for name in ["Alpha","Beta","Gamma"] { _ = try library.create(name:name) }
+        let items = try library.list(); var order = ShelfOrder()
+        try expect(try library.move(items[0].url,to:.unfinished,name:"Alpha") == items[0].url)
+        order.togglePin(items[2]); try expect(order.sorted(items).first == items[2])
+        try expect(order.move(items[1],by:-1,among:items)); try expect(order.sorted(items).map(\.title) == ["Gamma","Beta","Alpha"])
+        order = try JSONDecoder().decode(ShelfOrder.self,from:JSONEncoder().encode(order))
+        let movedURL = try library.move(items[2].url,to:.finished,name:"Keep Gamma")
+        guard let new = try library.list().first(where: {$0.url == movedURL}) else { throw Failure(message:"Moved package identity must match shelf listing: \(movedURL.absoluteString), \(try library.list().map { $0.url.absoluteString })") }
+        order.relocate(from:items[2],to:new)
+        try expect(order.pinned.contains(ShelfOrder.key(new)) && !order.pinned.contains(ShelfOrder.key(items[2])))
+        order.togglePin(new); try expect(!order.pinned.contains(ShelfOrder.key(new)))
+        try expect(!order.move(items[0],by:Int.min,among:items))
+    }
+}
+check("Large shelves sort and paginate without opening documents or crossing pin groups") {
+    let root = URL(fileURLWithPath:"/not-read/Unfinished")
+    let items = (0..<1001).map {ShelfItem(url:root.appendingPathComponent("Idea \($0).whiteboard"),status:.unfinished,modified:.distantPast)}
+    var order = ShelfOrder(); order.togglePin(items[1000]); order.togglePin(items[500])
+    try expect(order.move(items[1000],by:-1,among:items))
+    try expect(!order.move(items[1000],by:-1,among:items))
+    let sorted = order.sorted(items)
+    try expect(sorted[0] == items[1000] && sorted[1] == items[500])
+    let pages = stride(from:0,to:sorted.count,by:100).flatMap {Array(sorted.dropFirst($0).prefix(100))}
+    try expect(pages.count == 1001 && Set(pages.map(\.url)).count == 1001)
+}
+check("Fictional demo assets export and remain independent of a personal library") {
+    try temporaryLibrary { personal in
+        let idea = try personal.create(name:"Personal thought"), before = try Data(contentsOf:idea.appendingPathComponent("board.json"))
+        try temporaryLibrary { demo in
+            _ = try DemoContent.populate(demo)
+            let samples = try demo.list(); try expect(samples.count == 4)
+            try expect(samples.contains {$0.status == .finished})
+            for item in samples {
+                var board = try demo.load(item.url)
+                try expect(try BoardRenderer.png(board,package:item.url).count > 100)
+                board.texts.append(BoardText(text:"I can edit this",origin:Point(50,50)))
+                try demo.save(board,at:item.url); try expect(try demo.load(item.url) == board)
+            }
+        }
+        try expect(try personal.list().count == 1)
+        try expect(try Data(contentsOf:idea.appendingPathComponent("board.json")) == before)
+    }
+}
+func sketch(_ vertices: [Point], wobble: Double = 1.2) -> [Point] {
+    var points: [Point] = []
+    for i in 1..<vertices.count {
+        for step in 0..<24 {
+            let t = Double(step)/24, a = vertices[i-1], b = vertices[i]
+            points.append(Point(a.x+(b.x-a.x)*t+sin(Double(points.count)*1.7)*wobble,a.y+(b.y-a.y)*t+cos(Double(points.count)*1.3)*wobble))
+        }
+    }
+    points.append(vertices.last!); return points
+}
+check("Freehand lines, arrows, circles and ellipses snap from noisy sketches") {
+    let line = sketch([Point(10,10),Point(250,130)])
+    try expect(ShapeRecognition.recognise(line)?.name == "Line")
+    let arrow = sketch([Point(10,100),Point(310,100),Point(260,70),Point(310,100),Point(260,130)])
+    try expect(ShapeRecognition.recognise(arrow)?.name == "Arrow")
+    try expect(ShapeRecognition.recognise(Array(arrow.reversed()))?.name == "Arrow")
+    for (rx,ry,name) in [(100.0,100.0,"Circle"),(160,80,"Ellipse")] {
+        let loop = (0...180).map {i -> Point in
+            let a = Double(i)*2 * .pi/180, wobble = 1+0.02*sin(a*7)
+            return Point(250+rx*cos(a)*wobble,250+ry*sin(a)*wobble)
+        }
+        guard let result = ShapeRecognition.recognise(loop) else { throw Failure(message:"Expected \(name)") }
+        try expect(result.name == name && result.points.first == result.points.last)
+    }
+}
+check("Freehand rectangles work rotated, reversed and from an edge midpoint") {
+    let box = sketch([Point(100,0),Point(240,0),Point(240,140),Point(0,140),Point(0,0),Point(100,0)])
+    for degrees in [0.0,21,45,78] {
+        let a = degrees * .pi/180
+        let rotated = box.map {Point(300+$0.x*cos(a)-$0.y*sin(a),300+$0.x*sin(a)+$0.y*cos(a))}
+        for points in [rotated,Array(rotated.reversed())] {
+            guard let result = ShapeRecognition.recognise(points) else { throw Failure(message:"Expected rectangle at \(degrees) degrees") }
+            try expect(result.name == "Rectangle" && result.points.count == 5)
+            try expect(result.points.first == result.points.last)
+        }
+    }
+}
+check("Automatic shapes leave ambiguous marks, small writing and oversized strokes alone") {
+    let marks = [
+        sketch([Point(0,150),Point(75,0),Point(150,150),Point(0,150)]), // triangle
+        sketch([Point(0,150),Point(0,0),Point(75,100),Point(150,0),Point(150,150)]), // M
+        sketch([Point(0,0),Point(50,120),Point(100,0),Point(150,120),Point(200,0)]),
+        (0...120).map {i -> Point in let a = Double(i)*4 * .pi/120; return Point(200+100*cos(a),200+100*sin(a))}, // two loops
+        (0...120).map {i -> Point in let a = Double(i)*4.6/120; return Point(200+100*cos(a),200+100*sin(a))}, // open curve
+        sketch([Point(0,0),Point(12,12)],wobble:0.1)
+    ]
+    for (i,mark) in marks.enumerated() { try expect(ShapeRecognition.recognise(mark) == nil,"Ambiguous mark \(i) should remain ink") }
+    try expect(ShapeRecognition.recognise([Point(.nan,0),Point(100,10),Point(200,20)]) == nil)
+    try expect(ShapeRecognition.recognise(Array(repeating:Point(100,100),count:20_001)) == nil)
+    let circle = (0...120).map {i -> Point in let a = Double(i)*2 * .pi/120; return Point(100+60*cos(a),100+60*sin(a))}
+    try expect(ShapeRecognition.recognise(circle,zoom:0.15) == nil)
+}
 if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
     check("Real LaTeX rendering preserves editable source and vector assets through copy/reopen") {
         try temporaryLibrary { library in

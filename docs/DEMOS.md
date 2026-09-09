@@ -1,12 +1,28 @@
 # Try Whiteboard
 
+**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.3.0/Whiteboard-0.3.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.3.0/Whiteboard-Sample-Ideas.zip)**
+
+You can view every image on this page without installing the app or signing in. To try the actual product on an Apple silicon Mac, download the ZIP, open Whiteboard, then click **Demo** at the top. Use **My ideas** to return to your own workspace. The demo is local and editable, with no account or trial expiry. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
+
+Demo boards live separately in `~/Library/Application Support/Whiteboard/Demo Ideas`. Changes are retained when you leave and return. The app normally relaunches into your personal library; developers can launch the executable with `--demo` to open directly in the demo.
+
 The examples use original fictional content. The workspace images were exported by the running app itself; they are not design mockups or desktop recordings. The other PNG/PDF files are content exports from the same document renderer.
 
 ## Academic working
 
-Open **File → Try sample ideas**, then **One question, two attempts**. Select the question image and drag its bottom-right handle: its annotation stays attached. Undo, or use **Edit → Fresh copy without annotations** for another attempt. Export the selection or the whole board.
+Click **Demo**, then **One question, two attempts**. Select the question image and drag its bottom-right handle: its annotation stays attached. Undo, or use **Edit → Fresh copy without annotations** for another attempt. Export the selection or the whole board.
 
 ![Actual academic workspace](demos/academic-workspace.png)
+
+## Shapes and your shelf
+
+Open **Give an idea some shape**. With the **Pen** and **Auto shapes** on, draw a circle, box, arrow or line below the example. Lift the pen: a confident match becomes a precise shape. Press **Undo** once to get your original handwriting back; a second Undo removes the stroke. Hold **Shift** while drawing to keep a stroke freehand, or switch **Auto shapes** off.
+
+Explicit tools are still available: **L**, **A**, **R** and **O** for line, arrow, rectangle and ellipse. Shift constrains those tools to 45° angles or equal sides. Select and move any shape just like ink.
+
+Control-click its shelf card → **Pin idea**. It moves ahead of unpinned ideas. **Move earlier / later** arranges cards within their pinned or unpinned group. Try **Finish**, then **Reopen**: the pin stays with the idea.
+
+![Actual 0.3 app workspace with shapes and a pinned idea](demos/shapes-workspace.png)
 
 ## LaTeX and TikZ
 
@@ -15,6 +31,8 @@ Create a fresh board. Use **File → Insert LaTeX…** and render the included q
 ![Actual LaTeX and TikZ workspace](demos/maths-workspace.png)
 
 This demo requires local TeX to render new objects. [Supported input and setup](MATHS.md).
+
+See [automatic shapes](SHAPES.md) for gesture details and the current recognition limits.
 
 ## Everyday ideas
 
@@ -32,4 +50,6 @@ bash scripts/make_samples.sh
 
 This creates a new `build/Sample Ideas` library and PNG/PDF exports in `build/Sample Exports`. It refuses to overwrite an existing sample library. Choose the generated library through **File → Choose ideas folder…** to explore it separately from personal work.
 
-The release also includes an editable sample-library ZIP. These three generated sample boards do not require TeX. The maths workspace demonstrates the separate source editor with its built-in examples.
+The release also includes an editable sample-library ZIP. These four generated sample boards do not require TeX. The maths workspace demonstrates the separate source editor with its built-in examples.
+
+The academic and maths screenshots were captured from 0.2; the shapes workspace is from 0.3. All are actual app view exports.

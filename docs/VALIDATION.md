@@ -1,10 +1,20 @@
 # Native preview validation
 
+## 0.3 update
+
+**28 core checks and 3 optional real TeX checks pass (31 total).** Added coverage includes four-direction shape constraints; shape attachments, duplication and PNG/PDF exports after reopen; shelf pin/order serialization and in-app rename/status moves; sorting and pagination of 1,001 items without document reads; and separate editable fictional demo assets.
+
+Recognition checks exercise noisy lines and arrows, circular/elliptical loops, rotated/reversed boxes begun at an edge midpoint, and rejection of triangles, an M-shaped stroke, zigzags, double loops, open arcs, very small marks, non-finite coordinates and oversized input. These are geometric fixture checks, not evidence of perfect recognition across everyone’s handwriting.
+
+Native checks confirmed explicit rectangle drawing and undo, pin-to-front, retained pins through Finish/Reopen, returning from the demo to the previous personal board, and reopening the same demo after restarting without duplication. The active card and file identity now agree after folder moves and renames. The automatic-shape control and default-on state were inspected in the running app. The available native automation generates endpoint-only drags, so full curved freehand gestures are covered by the recogniser fixtures rather than claimed as an automated native gesture test.
+
+The 0.3 additions run on input, library changes or explicit demo entry. No idle recognition loop was added. Earlier resource measurements below are historical, not measurements of the final 0.3 release. Public demo assets are fictional; personal libraries and test-session boards are excluded.
+
 ## Build and environment
 
 The release build was compiled on Apple silicon with Swift 5.10 and the installed command-line macOS SDK, on macOS 26.6.2. The application has a macOS 13 deployment target; compatibility on older operating-system versions has not yet been tested. No external dependencies were downloaded.
 
-- App: `build/Whiteboard.app`, version 0.2.0.
+- Current app: `build/Whiteboard.app`, version 0.3.0. Historical measurements below identify their own earlier build.
 - App bundle disk size at measurement: approximately 728 KiB. This excludes shared macOS frameworks, document data and development files.
 - Profiled executable SHA-256: `936cadeecfbeb8480996aee8ca7c0e1ee7b9a365ca82a527d04980bafd05a707`. This identifies the earlier stress-tested build, not the 0.2.0 release executable. Later quality changes are described below.
 - The local ad-hoc signature passed strict verification after removing Finder layout metadata from the generated bundle. This is a local development app, not a notarised public distribution.
@@ -78,7 +88,7 @@ The profiled executable was `18fe5a15bef6737da3be578160666a1efd1e1956a01b0336527
 - Measure drawing frame-time distributions during real continuous input; the current check confirms usable interaction, not a measured 60/120 Hz guarantee.
 - Test longer sessions, repeated large-image imports and transitions between many image-rich boards.
 - Record physical footprint, allocation growth, wakeups and energy impact with full Instruments tooling.
-- Exercise library pagination with thousands of filenames and verify every page remains reachable.
+- Exercise native shelf pagination with thousands of filenames; the 0.3 core check covers sorting and 100-item paging for 1,001 items, while full native pagination remains to be exercised.
 - Test the preview budget at high bit depths and more than 128 simultaneously visible images; excess previews currently require zooming in.
 - Add prolonged-stroke checkpoints and longer-term history. Queued image decoding now has cancellation tokens; previous-save recovery has an explicit UI action.
 

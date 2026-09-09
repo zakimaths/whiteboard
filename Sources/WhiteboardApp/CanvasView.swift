@@ -1,15 +1,21 @@
 import AppKit
 import WhiteboardCore
 
-enum DrawingTool: String, CaseIterable { case pen, highlighter, eraser, select, text, hand }
+enum DrawingTool: String, CaseIterable { case pen, highlighter, eraser, select, text, hand, shape }
 
 final class CanvasView: NSView, NSTextFieldDelegate {
     var board = Board()
     var acceptsInput = true
     var packageURL: URL?
-    var tool: DrawingTool = .pen { didSet { onToolChange?(); window?.makeFirstResponder(self); discardCursorRects(); resetCursorRects() } }
+    var tool: DrawingTool = .pen {
+        willSet { finishGesture() }
+        didSet { onToolChange?(); window?.makeFirstResponder(self); discardCursorRects(); resetCursorRects() }
+    }
     var colour = "ink"
     var penWidth: Double = 3
+    var shape: DrawingShape = .arrow
+    var automaticShapes = true
+    var onRecognition: ((String) -> Void)?
     var onEditTeX: ((UUID) -> Void)?
     var onToolChange: (() -> Void)?
     var onCopy: (() -> Void)?
@@ -28,6 +34,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     private var undoStates: [Board] = [], redoStates: [Board] = []
     private var active: Ink?
     private var activePath: NSBezierPath?
+    private var activeShape: DrawingShape?
+    private var shapeEnd: Point?
+    private var keepFreehand = false
     private var lastPoint: Point?
     private var gestureStart: Point?
     private var selectRect: Rect?
@@ -64,7 +73,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         redoStates.removeAll()
     }
     func undoEdit() { guard acceptsInput else { return };
-        finishEditing(); guard let previous = undoStates.popLast() else { return }
+        finishEditing(); finishGesture(); guard let previous = undoStates.popLast() else { return }
         redoStates.append(board); board = previous; selected.removeAll(); reindex(); onEdit?(); needsDisplay = true
     }
     func redoEdit() { guard acceptsInput else { return };
@@ -197,8 +206,10 @@ final class CanvasView: NSView, NSTextFieldDelegate {
             } else { selected.removeAll(); selectRect = Rect(p.x, p.y, 0, 0) }
             needsDisplay = true; return
         }
-        checkpoint()
+        if tool != .shape { checkpoint() }
         let attached = board.images.last(where: {$0.frame.contains(p)})?.id
+        activeShape = tool == .shape ? shape : nil; shapeEnd = p
+        keepFreehand = event.modifierFlags.contains(.shift)
         active = Ink(points: [p], colour: colour, width: tool == .highlighter ? 18 : penWidth, highlighter: tool == .highlighter, imageID: attached)
         activePath = makePath(active!); needsDisplay = true
     }
@@ -220,18 +231,47 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         if selectRect != nil, let start = gestureStart {
             selectRect = Rect(min(p.x,start.x), min(p.y,start.y), abs(p.x-start.x), abs(p.y-start.y)); needsDisplay = true; return
         }
+        if activeShape != nil { shapeEnd = p; updateShape(constrained:event.modifierFlags.contains(.shift)); return }
         guard let previous = active?.points.last, hypot(previous.x-p.x, previous.y-p.y)*board.viewport.zoom >= 0.6 else { return }
         active?.points.append(p); activePath?.line(to: p.cg)
         let width = active?.width ?? 3
         invalidate(Rect(min(previous.x,p.x)-width, min(previous.y,p.y)-width, abs(previous.x-p.x)+width*2, abs(previous.y-p.y)+width*2))
     }
-    override func mouseUp(with event: NSEvent) { finishGesture() }
+    private func updateShape(constrained: Bool) {
+        guard let shape = activeShape, let start = gestureStart, let end = shapeEnd, let previous = active else { return }
+        active?.points = shape.points(from:start,to:end,constrained:constrained,width:previous.width)
+        activePath = makePath(active!); invalidate(previous.bounds); invalidate(active!.bounds)
+    }
+    override func flagsChanged(with event: NSEvent) {
+        if activeShape != nil { updateShape(constrained:event.modifierFlags.contains(.shift)) }
+        else { super.flagsChanged(with:event) }
+    }
+    override func mouseUp(with event: NSEvent) {
+        if activeShape != nil { shapeEnd = world(event); updateShape(constrained:event.modifierFlags.contains(.shift)) }
+        if event.modifierFlags.contains(.shift) { keepFreehand = true }
+        finishGesture()
+    }
     func finishGesture() {
+        if activeShape != nil {
+            if let start = gestureStart, let end = shapeEnd, hypot(end.x-start.x,end.y-start.y)*board.viewport.zoom >= 3 { checkpoint() }
+            else { active = nil; activePath = nil }
+        }
         if let active {
             board.ink.append(active); boundsByID[active.id] = active.bounds
             if let activePath { paths.setObject(activePath, forKey: active.id as NSUUID) }
+            if automaticShapes, !keepFreehand, activeShape == nil, !active.highlighter,
+               let recognised = ShapeRecognition.recognise(active.points,zoom:board.viewport.zoom,width:active.width), recognised.points != active.points {
+                // The intermediate checkpoint makes the first Undo restore the actual
+                // handwriting; a second Undo removes the stroke, just like normal ink.
+                checkpoint()
+                var precise = active; precise.points = recognised.points
+                board.ink[board.ink.count-1] = precise; boundsByID[precise.id] = precise.bounds
+                paths.setObject(makePath(precise),forKey:precise.id as NSUUID)
+                onRecognition?(recognised.name)
+            }
             self.active = nil; activePath = nil; changedInGesture = true
         }
+        activeShape = nil; shapeEnd = nil
         if let rect = selectRect {
             for ink in board.ink where (boundsByID[ink.id]?.intersects(rect) ?? false) { selected.insert(ink.id) }
             for image in board.images where image.frame.intersects(rect) { selected.insert(image.id) }
@@ -340,6 +380,9 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     }
     override func keyDown(with event: NSEvent) {
         guard acceptsInput else { return }
+        if event.keyCode == 53, activeShape != nil {
+            active = nil; activePath = nil; activeShape = nil; shapeEnd = nil; changedInGesture = false; needsDisplay = true; return
+        }
         let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
         if event.modifierFlags.contains(.command) {
             switch key {
@@ -364,7 +407,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         case 51,117: deleteSelection()
         case 36: onRename?()
         default:
-            switch key { case "p": tool = .pen; case "h": tool = .highlighter; case "e": tool = .eraser; case "v": tool = .select; case "t": tool = .text; case " ": tool = .hand; default: super.keyDown(with: event) }
+            switch key { case "p": tool = .pen; case "h": tool = .highlighter; case "e": tool = .eraser; case "v": tool = .select; case "t": tool = .text; case "a": shape = .arrow; tool = .shape; case "l": shape = .line; tool = .shape; case "r": shape = .rectangle; tool = .shape; case "o": shape = .ellipse; tool = .shape; case " ": tool = .hand; default: super.keyDown(with: event) }
         }
     }
     func pasteContent() {
