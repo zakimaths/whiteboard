@@ -447,6 +447,96 @@ check("Failed creation and failed image writes leave existing ideas intact") {
         try expect(try Data(contentsOf:original.appendingPathComponent("board.json")) == before)
     }
 }
+check("Automatic history is spaced across saves and restarts and moves with the idea") {
+    try temporaryLibrary { initial in
+        var clock = Date(timeIntervalSince1970:1_700_000_000)
+        let library = try Library(root:initial.root,now:{clock}); var board = Board()
+        let url = try library.create(board:board)
+        try expect(try library.history(url).isEmpty)
+        board.texts = [BoardText(text:"First edit",origin:Point(0,0))]; try library.save(board,at:url)
+        try expect(try library.history(url).count == 1)
+        for index in 1...25 { clock = clock.addingTimeInterval(1); board.texts[0].text = "Edit \(index)"; try library.save(board,at:url) }
+        try expect(try library.history(url).count == 1)
+        let reopened = try Library(root:initial.root,now:{clock}); _ = try reopened.load(url)
+        try reopened.save(board,at:url); try expect(try reopened.history(url).count == 1)
+        clock = clock.addingTimeInterval(300); try reopened.save(board,at:url)
+        let snapshots = try reopened.history(url); try expect(snapshots.count == 2)
+        let moved = try reopened.move(url,to:.finished,name:"Kept thought")
+        try expect(try reopened.history(moved) == snapshots)
+        try reopened.save(board,at:moved); try expect(try reopened.history(moved).count == 2)
+    }
+}
+check("Manual checkpoints retain twenty recent versions and restore as independent copies") {
+    try temporaryLibrary { initial in
+        var clock = Date(timeIntervalSince1970:1_700_000_000)
+        let library = try Library(root:initial.root,now:{clock}); var board = Board()
+        let source = try library.create(); let asset = try library.importAsset(data:Data([1,2,3]),extension:"png",to:source)
+        var image = BoardImage(asset:asset,frame:Rect(0,0,100,100)); image.crop = Rect(0,0,0.5,0.5)
+        board.version = 2; board.images = [image]; board.ink = [Ink(points:[Point(10,20)],imageID:image.id)]
+        board.texts = [BoardText(text:"",origin:Point(0,0))]
+        for index in 0..<25 {
+            clock = clock.addingTimeInterval(1); board.texts[0].text = "Version \(index)"
+            try library.save(board,at:source); try library.checkpoint(source)
+        }
+        let snapshots = try library.history(source); try expect(snapshots.count == 20)
+        let corrupt = Data("corrupt current metadata".utf8); try corrupt.write(to:source.appendingPathComponent("board.json"))
+        let recovered = try library.recoverSnapshot(snapshots.last!.filename,from:source)
+        let old = try library.load(recovered)
+        try expect(old.texts[0].text == "Version 5" && old.id != board.id)
+        try expect(old.images == board.images && old.ink == board.ink)
+        try expect(try Data(contentsOf:source.appendingPathComponent("board.json")) == corrupt)
+        try FileManager.default.removeItem(at:source)
+        try expect(try Data(contentsOf:recovered.appendingPathComponent("assets").appendingPathComponent(asset)) == Data([1,2,3]))
+    }
+}
+check("History byte budget prunes oldest metadata while leaving unrelated files alone") {
+    try temporaryLibrary { library in
+        let source = try library.create(); let folder = source.appendingPathComponent("history")
+        try FileManager.default.createDirectory(at:folder,withIntermediateDirectories:false)
+        for index in 0..<20 {
+            let url = folder.appendingPathComponent("\(1_600_000_000+index)_\(UUID().uuidString).json")
+            FileManager.default.createFile(atPath:url.path,contents:Data())
+            let handle = try FileHandle(forWritingTo:url); try handle.truncate(atOffset:4*1024*1024); try handle.close()
+        }
+        let unrelated = folder.appendingPathComponent("keep.txt"); try Data([9]).write(to:unrelated)
+        try library.checkpoint(source)
+        let history = try library.history(source)
+        try expect(history.count == 16 && history.reduce(0,{$0+$1.bytes}) <= Library.historyByteLimit)
+        try expect(try Data(contentsOf:unrelated) == Data([9]))
+        let copy = try library.recoverSnapshot(history[0].filename,from:source); _ = try library.load(copy)
+    }
+}
+check("History write failure preserves saved data and snapshots, then allows retry") {
+    try temporaryLibrary { initial in
+        let source = try initial.create(); try initial.checkpoint(source)
+        let previousHistory = try initial.history(source), before = try Data(contentsOf:source.appendingPathComponent("board.json"))
+        var fail = true
+        let library = try Library(root:initial.root,now:{Date().addingTimeInterval(600)},atomicWrite:{data,url in
+            if fail && url.deletingLastPathComponent().lastPathComponent == "history" { throw NSError(domain:NSCocoaErrorDomain,code:NSFileWriteOutOfSpaceError) }
+            try data.write(to:url,options:.atomic)
+        })
+        var board = try library.load(source); board.texts = [BoardText(text:"Unsaved thought",origin:Point(0,0))]
+        try rejects {try library.save(board,at:source)}
+        try expect(try Data(contentsOf:source.appendingPathComponent("board.json")) == before)
+        try expect(try library.history(source) == previousHistory)
+        fail = false; try library.save(board,at:source); try expect(try library.load(source) == board)
+    }
+}
+check("Recovery rejects traversal, corrupt snapshots and symlinked history without overwriting") {
+    try temporaryLibrary { library in
+        let source = try library.create(); try library.checkpoint(source)
+        let snapshot = try library.history(source)[0]
+        try rejects {_ = try library.recoverSnapshot("../board.json",from:source)}
+        try Data("invalid".utf8).write(to:source.appendingPathComponent("history").appendingPathComponent(snapshot.filename))
+        try rejects {_ = try library.recoverSnapshot(snapshot.filename,from:source)}
+        try expect(try library.list().count == 1)
+        let other = try library.create(name:"Other")
+        try FileManager.default.createSymbolicLink(at:other.appendingPathComponent("history"),withDestinationURL:source.appendingPathComponent("history"))
+        try rejects {try library.checkpoint(other)}
+        try rejects {_ = try library.history(other)}
+        try expect(try library.load(source).isEmpty)
+    }
+}
 if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
     check("Real LaTeX rendering preserves editable source and vector assets through copy/reopen") {
         try temporaryLibrary { library in

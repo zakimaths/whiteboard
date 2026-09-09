@@ -8,7 +8,7 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.4.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.5.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
@@ -19,12 +19,12 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 - Drop or paste screenshots; select, crop, restore, move, resize and annotate them. Attached ink follows movement and resizing.
 - A collapsible top shelf whose buttons read real filenames. Red is unfinished, green is finished; labels and symbols accompany the colours.
 - Pin important ideas and move them earlier or later on the shelf. Preferences stay separate for each library.
-- Local autosave, save/reopen, copies, archive, and recovery of the previous saved revision as a separate file.
+- Local autosave, save/reopen, copies, archive, manual checkpoints and dated recovery history, restored as separate files.
 - LaTeX and TikZ source editing, bounded image previews and vector PDF assets. No typesetting process remains running between renders.
 - Content or selection export to PNG/PDF; copy an annotated selection as PNG; export a workspace preview with the desktop excluded.
 - Menu-bar show/hide and movement between connected monitors. Hold Command–Shift–Space to temporarily use the app underneath; release to return.
 
-This is a working preview, not the complete 84-feature product. Thumbnail cards, direct drag-to-status, OCR, handwriting-to-equation recognition and longer recovery history remain planned. [Exact implementation status](docs/IMPLEMENTATION.md).
+This is a working preview, not the complete 84-feature product. Thumbnail cards, direct drag-to-status, OCR, handwriting-to-equation recognition and deleted-idea recovery remain planned. [Exact implementation status](docs/IMPLEMENTATION.md).
 
 ## Open and use
 
@@ -63,6 +63,7 @@ To look around without installing anything, [view the public demos](docs/DEMOS.m
 | Export whole content or selection | Command–E; File menu for PDF |
 | Pin / reorder | Control-click a shelf file → Pin, Move earlier / later |
 | Change status or archive | Finish / Reopen button or Control-click a shelf file |
+| Keep / recover a version | File → Save checkpoint / Recovery history; also Control-click a shelf card |
 | Try / leave the demo | Demo / My ideas in the shelf |
 | Change monitor | Screens or the menu-bar display actions |
 
@@ -72,7 +73,9 @@ New libraries default to `~/Library/Application Support/Whiteboard/Ideas`, outsi
 
 Pins and manual order are stored in macOS preferences for each library. In-app rename and status moves retain them; external Finder renames and moving the library to another Mac do not yet carry these preferences.
 
-Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision and an `assets` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained. Cropping also retains the original screenshot in the editable file; it is not redaction. Cropped boards require version 0.4 or later. [Crop controls, exports and file compatibility](docs/CROPPING.md).
+Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision, an `assets` folder and (after editing or checkpointing) a `history` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained. Cropping also retains the original screenshot in the editable file; it is not redaction. Cropped boards require version 0.4 or later. [Crop controls, exports and file compatibility](docs/CROPPING.md).
+
+History retains up to 20 snapshots within a 64 MiB metadata budget. Automatic snapshots are spaced five minutes apart during edits; manual checkpoints are available at any time. [Recovery behaviour and limits](docs/RECOVERY.md).
 
 **Saved locally** appears after a successful write. Save failures keep the in-memory work and offer a copy workflow. Saves commit completed gestures; an in-flight stroke commits on release, hide or quit. Keep backups of important work while using the preview.
 
@@ -84,7 +87,7 @@ Rendering needs a local TeX installation with `pdflatex`, `standalone`, `amsmath
 
 The app uses AppKit and Core Graphics, with no webview or third-party Swift packages. Drawing responds to input and invalidation; saves and folder refreshes use one-shot scheduling. Screenshot previews share a 48 MiB decoded-image budget. Typesetting is an optional short-lived process on its own utility queue.
 
-A pre-typesetting sample-board build measured roughly **52 MiB RSS and 0.23% average idle CPU over 30 seconds** on the development Mac. An earlier larger-board check and the exact limitations are in [validation](docs/VALIDATION.md). RSS is not total system memory, and these measurements are not battery-life guarantees.
+A 30-second check of the 0.5 build after its recovery workflow measured **129.56 MiB RSS**, with no increase in the process CPU counter at its available precision. This is a short visible-idle sample, not a battery-life or memory-reduction guarantee. [Measurements and remaining performance work](docs/VALIDATION.md).
 
 ## Build and check
 

@@ -1,6 +1,6 @@
 # Try Whiteboard
 
-**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.4.0/Whiteboard-0.4.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.4.0/Whiteboard-Sample-Ideas.zip)**
+**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.5.0/Whiteboard-0.5.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.5.0/Whiteboard-Sample-Ideas.zip)**
 
 You can view every image on this page without installing the app or signing in. To try the actual product on an Apple silicon Mac, download the ZIP, open Whiteboard, then click **Demo** at the top. Use **My ideas** to return to your own workspace. The demo is local and editable, with no account or trial expiry. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
 
@@ -51,6 +51,14 @@ The sample **An idea before it disappears** is an open-ended thought rather than
 ![Everyday-ideas content export](demos/an-idea-before-it-disappears.png)
 
 The **Keep what worked** sample starts in Finished. Its status can be changed back to Unfinished.
+
+## Try recovery without losing your current attempt
+
+Open **One question, two attempts** and choose **File → Save checkpoint**. Draw an extra line beside the working. Control-click that idea on the shelf → **Recovery history…** → select the checkpoint → **Recover as copy**.
+
+The recovered idea contains the earlier version; the original keeps your later line. Click either shelf card to compare them. Recovery works with the sample's screenshot and attached annotation. These demo edits stay in the separate demo library; **My ideas** returns to your personal workspace.
+
+[Snapshot spacing, storage budget and recovery limits](RECOVERY.md).
 
 ## Reproducible sample files
 

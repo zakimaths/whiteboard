@@ -1,0 +1,46 @@
+{
+  "label": "0.5 recovered academic demo, visible and idle",
+  "pid": 104,
+  "metric": "Process resident set size (KiB) and cumulative user+system CPU time from ps; not total system memory or battery energy",
+  "duration_seconds": 30.082,
+  "rss_mib_min": 129.5625,
+  "rss_mib_max": 129.5625,
+  "average_cpu_percent_one_core": 0.0,
+  "samples": [
+    {
+      "elapsed_seconds": 0.002,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 5.016,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 10.032,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 15.045,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 20.06,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 25.073,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    },
+    {
+      "elapsed_seconds": 30.084,
+      "rss_kib": 132672,
+      "cpu_seconds": 1.23
+    }
+  ]
+}

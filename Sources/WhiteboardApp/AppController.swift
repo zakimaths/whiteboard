@@ -101,7 +101,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         appMenu.addItem(withTitle: "Quit Whiteboard", action: #selector(quit), keyEquivalent: "q").target = self
         appItem.submenu = appMenu; main.addItem(appItem)
         let fileMenu = NSMenu(title:"File")
-        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Open demo workspace",#selector(trySamples),"")] {
+        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Save checkpoint",#selector(saveCheckpoint),""),("Recovery history…",#selector(showRecoveryHistory),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Open demo workspace",#selector(trySamples),"")] {
             fileMenu.addItem(withTitle:title,action:action,keyEquivalent:key).target = self
         }
         fileMenu.addItem(withTitle:"Return to my ideas",action:#selector(returnToIdeas),keyEquivalent:"").target = self
@@ -371,6 +371,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             let action = NSMenuItem(title: "Move to \(status.rawValue)", action: #selector(moveCard(_:)), keyEquivalent: "")
             action.target = self; action.representedObject = [item.url.path,status.rawValue]; menu.addItem(action)
         }
+        let history = NSMenuItem(title:"Recovery history…",action:#selector(recoverCard(_:)),keyEquivalent:"")
+        history.target = self; history.representedObject = item.url; menu.addItem(history)
         let reveal = NSMenuItem(title: "Show in Finder", action: #selector(revealCard(_:)), keyEquivalent: "")
         reveal.target = self; reveal.representedObject = item.url; menu.addItem(reveal)
         return menu
@@ -490,7 +492,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         add("Mark finished / unfinished",#selector(finishIdea)); add("Archive current idea",#selector(archiveIdea))
         menu.addItem(.separator()); add("Choose ideas folder…",#selector(chooseFolder)); add("Show ideas folder",#selector(revealFolder))
         add("Clear ink (undoable)",#selector(clearInk)); add("Lock / unlock selected image",#selector(lockImage))
-        add("Save selection as idea",#selector(saveSelection)); add("Export PNG…",#selector(exportPNG)); add("Export PDF…",#selector(exportPDF)); add("Capture screenshot…",#selector(captureScreenshot)); add("Recover previous save as a copy",#selector(recoverPrevious))
+        add("Save selection as idea",#selector(saveSelection)); add("Export PNG…",#selector(exportPNG)); add("Export PDF…",#selector(exportPDF)); add("Capture screenshot…",#selector(captureScreenshot)); add("Save checkpoint",#selector(saveCheckpoint)); add("Recovery history…",#selector(showRecoveryHistory)); add("Recover previous save as a copy",#selector(recoverPrevious))
         menu.addItem(.separator()); add("Controls & build notes",#selector(showHelp)); add("Quit Whiteboard",#selector(quit),key: "q")
         statusItem.menu = menu
     }
@@ -791,6 +793,63 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                 self.exporting = false
                 switch result { case .success(let data): NSPasteboard.general.clearContents(); NSPasteboard.general.setData(data,forType:.png)
                 case .failure(let error): self.showError(error) }
+            }
+        }
+    }
+    @objc func saveCheckpoint() {
+        afterSaving {
+            guard let source = self.activeURL else { return }; self.isBusy = true
+            self.io.async {
+                let result = Result { try self.library.checkpoint(source) }
+                DispatchQueue.main.async {
+                    self.isBusy = false
+                    switch result {
+                    case .success: self.saveLabel.stringValue = "Checkpoint saved"
+                    case .failure(let error): self.showError(error)
+                    }
+                }
+            }
+        }
+    }
+    @objc func showRecoveryHistory() {
+        guard let source = activeURL else { return }; presentRecoveryHistory(source)
+    }
+    @objc private func recoverCard(_ sender: NSMenuItem) {
+        guard let source = sender.representedObject as? URL else { return }; presentRecoveryHistory(source)
+    }
+    private func presentRecoveryHistory(_ source: URL) {
+        guard !isBusy else { return }
+        canvas.finishEditing(); canvas.finishGesture(); saveWork?.cancel(); isBusy = true
+        io.async {
+            let result = Result { try self.library.history(source) }
+            DispatchQueue.main.async {
+                switch result {
+                case .failure(let error): self.isBusy = false; self.showError(error); self.saveNow()
+                case .success(let snapshots):
+                    let alert = NSAlert(); alert.messageText = "Recovery history · "+source.deletingPathExtension().lastPathComponent
+                    if snapshots.isEmpty {
+                        alert.informativeText = "No snapshots yet. Choose File → Save checkpoint to keep this version. Automatic snapshots are kept as you edit, at least five minutes apart."
+                        alert.addButton(withTitle:"Done"); alert.runModal(); self.isBusy = false; self.saveNow(); return
+                    }
+                    alert.informativeText = "Choose a saved version. It opens as a separate recovered idea. Up to 20 snapshots are kept within a 64 MiB history budget; image assets are shared."
+                    let picker = NSPopUpButton(frame:NSRect(x:0,y:0,width:360,height:28),pullsDown:false)
+                    let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.timeStyle = .medium
+                    for (index,snapshot) in snapshots.enumerated() { picker.addItem(withTitle:"\(index+1). \(formatter.string(from:snapshot.date))") }
+                    picker.setAccessibilityLabel("Saved version"); alert.accessoryView = picker
+                    alert.addButton(withTitle:"Recover as copy"); alert.addButton(withTitle:"Cancel")
+                    guard alert.runModal() == .alertFirstButtonReturn else { self.isBusy = false; self.saveNow(); return }
+                    let snapshot = snapshots[picker.indexOfSelectedItem]
+                    self.io.async {
+                        let recovered = Result { try self.library.recoverSnapshot(snapshot.filename,from:source) }
+                        DispatchQueue.main.async {
+                            self.isBusy = false
+                            switch recovered {
+                            case .success(let url): self.refreshShelf(); self.afterSaving { self.loadIdea(url) }
+                            case .failure(let error): self.showError(error); self.saveNow()
+                            }
+                        }
+                    }
+                }
             }
         }
     }

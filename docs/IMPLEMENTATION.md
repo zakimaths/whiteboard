@@ -47,7 +47,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 41 | Navigation | Partial: pan, zoom, reset, fresh space and fit-all; last-view history next |
 | 42 | Select and organise | Partial: selection, moving, screenshot resizing, locking and duplication; grouping next |
 | 43 | Separate clears | Partial: selection delete and clear ink; clear-everything control next |
-| 44 | Undo/redo | Built: bounded 40-edit in-memory history; long-term history next |
+| 44 | Undo/redo | Built: bounded 40-edit in-memory Undo/Redo; separate dated recovery snapshots |
 | 45 | Temporary pointer ink | Next |
 | 46 | Built-in capture | Built: user-initiated macOS capture action; permission flow and end-to-end capture still need validation |
 | 47 | Paste image/text/link | Partial: images and plain text; URL-specific clickable objects next |
@@ -82,7 +82,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 76 | Views as pages | Next |
 | 77 | Continuous autosave | Built: saves independent of recognition, serialised off drawing thread |
 | 78 | Editable board files | Built: JSON plus embedded compressed assets |
-| 79 | Recovery history | Partial: one previous metadata revision, recovery as a separate copy and in-memory undo; longer history next |
+| 79 | Recovery history | Built: manual checkpoints and dated automatic snapshots, up to 20 within 64 MiB of metadata; recovery as a separate copy from File or shelf menu. Deleted-package recovery and in-progress stroke checkpoints remain next |
 | 80 | PNG/PDF export | Built: whole-content or selected-content PNG/PDF, rendered from source assets; PNG output has a pixel limit |
 | 81 | Ink + transcription export | Next |
 | 82 | Drag/copy finished work out | Partial: file export and copying a selected region as PNG; outbound drag next |

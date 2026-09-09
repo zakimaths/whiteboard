@@ -7,7 +7,7 @@ Ready-to-use public materials:
 - [Academic workspace](demos/academic-workspace.png): actual app preview export with fictional study content.
 - [LaTeX and TikZ workspace](demos/maths-workspace.png): actual rendered maths objects in the app.
 - [Everyday-ideas example](demos/an-idea-before-it-disappears.png): a content export.
-- [Repository](https://github.com/zakimaths/whiteboard) and [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.4.0).
+- [Repository](https://github.com/zakimaths/whiteboard) and [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.5.0).
 
 The repository excludes personal libraries, the original user screenshot, earlier conversation-specific reports, development caches and diagnostic logs. Demo media includes sample content only. The release and checklist identify implemented features and outstanding work explicitly.
 
@@ -28,7 +28,9 @@ The native macOS preview now has a shelf of real saved filenames, unfinished/fin
 
 I’m prioritising the product itself: save and recovery behaviour, useful controls, and keeping unnecessary background work out. The repository includes the optimisation research, test results, honest limitations and the full feature checklist.
 
-The GitHub download now includes a Demo button: four editable examples in a separate workspace, with a quick return to your own ideas. You can also view the examples in the repository without installing anything.
+The latest update adds manual checkpoints and dated recovery history. Restoring opens a separate idea, preserving the current version. Snapshots share image assets and run during edits instead of on a background timer.
+
+The GitHub download includes a Demo button: four editable examples in a separate workspace, with a quick return to your own ideas. You can also view the examples in the repository without installing anything.
 
 It’s an early preview with more to build. The demos use fictional content and show the actual app. Distribution is through GitHub for now.
 

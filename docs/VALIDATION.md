@@ -1,5 +1,19 @@
 # Native preview validation
 
+## 0.5 update
+
+**38 core checks and 3 optional real TeX checks pass (41 total).** Five new recovery checks cover event-driven five-minute snapshot spacing across a new Library instance, status moves, 20-version retention, the 64 MiB metadata budget using sparse fixture files, and preservation of unrelated files. Recovery from a corrupted current board retains cropped images and attached ink; recovered assets remain readable after removing the original fixture package.
+
+Injected history-write failure preserves existing metadata and snapshots and allows a core retry after the fault is lifted. Traversal names, invalid snapshot JSON and symlinked history directories are rejected. These cases do not establish complete filesystem-race or multiwriter protection.
+
+In the native 0.5 app, the empty-history explanation, Save checkpoint confirmation, dated picker and shelf-card Recovery history action were exercised. An added line stayed in the original while its recovered copy contained the earlier ink and identical images/text with a new board identity. The sample test used the separate demo library.
+
+## 0.5 visible-idle measurement
+
+After the native recovery workflow, the visible recovered academic demo was sampled for 30.082 seconds. RSS remained **129.56 MiB** and cumulative process CPU time did not increase at the counter's precision (**0.0% measured average**). The board contained one screenshot and the sample's ink/text. The app had opened native recovery dialogs and switched boards before this sample. [Raw sample](benchmarks/v0.5-recovery-idle.json).
+
+Executable SHA-256: `a27b203034658be3d9024e6dcc1d96fd0a4ee409ca1faed28422a44cd9ca501b`. This is the final 0.5 executable. This single post-interaction sample is not directly comparable to earlier builds' different workflows; it does not establish a memory reduction. RSS excludes compositor costs and is not physical footprint. No measured CPU-counter increase is not a claim of zero power use. Long-session allocation and energy measurements remain outstanding.
+
 ## 0.4 update
 
 **33 core checks and 3 optional real TeX checks pass (36 total).** New checks cover crop geometry, attached-ink resizing, copy/reopen/restore, invalid and locked crops, exclusion of vector maths objects, and format-version validation. A coloured image fixture verifies top-left pixel coordinates in PNG output; PDF inspection confirms the embedded bitmap contains only the cropped pixel dimensions. Editable copies retain their full original image assets.
@@ -26,7 +40,7 @@ The 0.3 additions run on input, library changes or explicit demo entry. No idle 
 
 The release build was compiled on Apple silicon with Swift 5.10 and the installed command-line macOS SDK, on macOS 26.6.2. The application has a macOS 13 deployment target; compatibility on older operating-system versions has not yet been tested. No external dependencies were downloaded.
 
-- Current app: `build/Whiteboard.app`, version 0.4.0. Historical measurements below identify their own earlier build.
+- Current app: `build/Whiteboard.app`, version 0.5.0. Historical measurements below identify their own earlier build.
 - App bundle disk size at measurement: approximately 728 KiB. This excludes shared macOS frameworks, document data and development files.
 - Profiled executable SHA-256: `936cadeecfbeb8480996aee8ca7c0e1ee7b9a365ca82a527d04980bafd05a707`. This identifies the earlier stress-tested build, not the 0.2.0 release executable. Later quality changes are described below.
 - The local ad-hoc signature passed strict verification after removing Finder layout metadata from the generated bundle. This is a local development app, not a notarised public distribution.

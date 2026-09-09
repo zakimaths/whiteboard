@@ -10,15 +10,25 @@ public struct ShelfItem: Equatable {
     public init(url: URL, status: IdeaStatus, modified: Date) { self.url = url; self.status = status; self.modified = modified }
 }
 
+public struct RecoverySnapshot: Equatable {
+    public let filename: String
+    public let date: Date
+    public let bytes: Int
+}
+
 // All operations are run on the application's single storage queue.
 public final class Library {
     public let root: URL
     private let fm = FileManager.default
     private var knownVersions: [URL: Date] = [:]
     private let write: (Data,URL) throws -> Void
-    public init(root: URL, atomicWrite: @escaping (Data,URL) throws -> Void = {try $0.write(to:$1,options:.atomic)}) throws {
+    private let now: () -> Date
+    private var nextSnapshot: [URL: Date] = [:]
+    public static let historyLimit = 20
+    public static let historyByteLimit = 64 * 1024 * 1024
+    public init(root: URL, now: @escaping () -> Date = Date.init, atomicWrite: @escaping (Data,URL) throws -> Void = {try $0.write(to:$1,options:.atomic)}) throws {
         self.root = root.standardizedFileURL
-        self.write = atomicWrite
+        self.write = atomicWrite; self.now = now
         for status in IdeaStatus.allCases {
             try fm.createDirectory(at: folder(status), withIntermediateDirectories: true)
         }
@@ -83,11 +93,73 @@ public final class Library {
         guard data.count < 64*1024*1024 else { throw BoardError.invalidData }
         // Keep one recoverable previous version. Never move away the current valid file.
         if fm.fileExists(atPath: file.path) {
-            let previous = try Data(contentsOf: file)
+            let previous = try readMetadata(file)
+            if nextSnapshot[url] == nil {
+                nextSnapshot[url] = try history(url).first.map {$0.date.addingTimeInterval(300)} ?? .distantPast
+            }
+            if now() >= nextSnapshot[url]! {
+                _ = try JSONDecoder().decode(Board.self,from:previous).validated()
+                try storeSnapshot(previous,at:url)
+            }
             try write(previous,url.appendingPathComponent("previous.json"))
         }
         try write(data,file)
         knownVersions[url] = try stamp(file)
+    }
+    private func readMetadata(_ file: URL) throws -> Data {
+        let values = try file.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey,.isSymbolicLinkKey])
+        guard values.isRegularFile == true, values.isSymbolicLink != true,
+              let size = values.fileSize, size < Self.historyByteLimit else { throw BoardError.invalidData }
+        return try Data(contentsOf:file)
+    }
+    private func historyFolder(_ url: URL, create: Bool = false) throws -> URL {
+        let folder = url.appendingPathComponent("history",isDirectory:true)
+        if fm.fileExists(atPath:folder.path) {
+            let values = try folder.resourceValues(forKeys:[.isDirectoryKey,.isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else { throw BoardError.invalidData }
+        } else if create { try fm.createDirectory(at:folder,withIntermediateDirectories:false) }
+        return folder
+    }
+    /// Lists file metadata only; no board or image decoding and no background timer.
+    public func history(_ url: URL) throws -> [RecoverySnapshot] {
+        let folder = try historyFolder(url)
+        guard fm.fileExists(atPath:folder.path) else { return [] }
+        return try fm.contentsOfDirectory(at:folder,includingPropertiesForKeys:[.fileSizeKey,.isRegularFileKey,.isSymbolicLinkKey],options:[.skipsHiddenFiles]).compactMap { file in
+            let parts = file.deletingPathExtension().lastPathComponent.split(separator:"_")
+            guard file.pathExtension == "json", parts.count == 2, UUID(uuidString:String(parts[1])) != nil,
+                  let time = Double(parts[0]), time.isFinite else { return nil }
+            let values = try file.resourceValues(forKeys:[.fileSizeKey,.isRegularFileKey,.isSymbolicLinkKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true, let size = values.fileSize else { return nil }
+            return RecoverySnapshot(filename:file.lastPathComponent,date:Date(timeIntervalSince1970:time),bytes:size)
+        }.sorted { $0.date == $1.date ? $0.filename > $1.filename : $0.date > $1.date }
+    }
+    private func storeSnapshot(_ data: Data, at url: URL) throws {
+        let folder = try historyFolder(url,create:true), date = now()
+        let filename = String(format:"%.6f",locale:Locale(identifier:"en_US_POSIX"),date.timeIntervalSince1970)+"_"+UUID().uuidString+".json"
+        try write(data,folder.appendingPathComponent(filename))
+        // Prune only after the new snapshot exists. Assets remain shared with the board.
+        var bytes = 0
+        for (index,snapshot) in try history(url).enumerated() {
+            bytes += snapshot.bytes
+            if index >= Self.historyLimit || bytes > Self.historyByteLimit {
+                try fm.removeItem(at:folder.appendingPathComponent(snapshot.filename))
+            }
+        }
+        nextSnapshot[url] = date.addingTimeInterval(300)
+    }
+    public func checkpoint(_ url: URL) throws {
+        let file = url.appendingPathComponent("board.json")
+        if let known = knownVersions[url], try stamp(file) != known { throw BoardError.conflict }
+        let data = try readMetadata(file)
+        _ = try JSONDecoder().decode(Board.self,from:data).validated()
+        try storeSnapshot(data,at:url)
+    }
+    public func recoverSnapshot(_ filename: String, from url: URL) throws -> URL {
+        guard try history(url).contains(where: {$0.filename == filename}) else { throw BoardError.missingFile }
+        let file = try historyFolder(url).appendingPathComponent(filename)
+        var board = try JSONDecoder().decode(Board.self,from:readMetadata(file)).validated()
+        board.id = UUID()
+        return try copy(board,from:url,name:url.deletingPathExtension().lastPathComponent+" recovered")
     }
     public func recoverPrevious(_ url: URL) throws -> URL {
         let previous = url.appendingPathComponent("previous.json")
@@ -104,6 +176,7 @@ public final class Library {
         let destination = availableURL(name: title, status: status)
         try fm.moveItem(at: url, to: destination)
         knownVersions[destination] = knownVersions.removeValue(forKey: url)
+        nextSnapshot[destination] = nextSnapshot.removeValue(forKey:url)
         return destination
     }
     public func copy(_ board: Board, from source: URL, name: String) throws -> URL {

@@ -1,3 +1,19 @@
+# Whiteboard 0.5.0 · keep an earlier version
+
+- File → Save checkpoint keeps the current saved version. File → Recovery history lists dated snapshots and restores the selected version as a separate unfinished idea.
+- Control-click any shelf card → Recovery history to recover a readable snapshot even when its current board will not open.
+- Automatic history preserves a saved version before the first edit is written, then at least five minutes apart during subsequent saves. Manual checkpoints reset that spacing. No repeating timer, image decoder or background service is added.
+- Keep up to 20 snapshots within 64 MiB of history metadata. Older snapshots are pruned after a new one is written. Screenshots and maths assets are shared within the original package and copied when a version is recovered.
+- History survives app restarts, rename and status changes. Ink, cropped screenshots, annotations, text, maths source and the saved view remain editable after recovery.
+
+**41 local checks pass: 38 core and 3 real LaTeX/TikZ checks.** Added coverage exercises spacing across restarts, retention by count and bytes, independent recovered assets, corrupt-current recovery, failed snapshot writes and rejection of unsafe recovery paths and symlinked history folders. Native testing verified checkpoint creation, the dated picker, shelf-menu recovery and preservation of the later edit in the original idea.
+
+History does not recover a deleted package, and in-progress strokes still commit on release, hide or quit. A failed history write uses the existing save-error/copy flow. These snapshots are bounded local recovery, not external backups. [Recovery details](RECOVERY.md).
+
+**GitHub preview for Apple silicon; ad-hoc signed, not Apple-notarised.** Existing demos remain accessible and now include a recovery walkthrough. [Demos](DEMOS.md), [full feature status](IMPLEMENTATION.md), [validation](VALIDATION.md).
+
+---
+
 # Whiteboard 0.4.0 · crop, restore and return
 
 - Select a screenshot and press C to crop it. Drag the area to keep, then Return or Apply crop. Escape cancels. Edit → Restore full image restores the original. Crop edits support undo and survive save/reopen, copying, movement and resizing with attached ink.
