@@ -1,3 +1,9 @@
+# Whiteboard 0.7.1 · a clear blank canvas
+
+Removed the central welcome sentence and instruction line from empty whiteboards. New and cleared boards now leave the writing area empty. Existing notes and sample content are unchanged. The 0.7.0 demo packs remain compatible.
+
+---
+
 # Whiteboard 0.7.0 · an everyday canvas, with stronger foundations
 
 - The app's Demo button now opens three general-purpose boards. LaTeX and TikZ start with generic examples. Detailed PDE boards remain available in the separate GitHub sample pack; academic assets are excluded from the app bundle. Earlier demo libraries remain saved.

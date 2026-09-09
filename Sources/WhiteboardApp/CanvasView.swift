@@ -230,16 +230,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
             NSColor.systemBlue.setStroke(); let border = NSBezierPath(rect:region.cg); border.lineWidth = 2/z; border.stroke()
         }
         context.restoreGState()
-        if board.isEmpty && active == nil && editor == nil {
-            let text = "A little space for whatever comes to mind."
-            let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 23, weight: .medium), .foregroundColor: NSColor.boardInk.withAlphaComponent(0.5)]
-            let size = (text as NSString).size(withAttributes: attrs)
-            (text as NSString).draw(at: NSPoint(x: max(90, (bounds.width-size.width)/2), y: bounds.height*0.42), withAttributes: attrs)
-            let hint = "Write anywhere · Drop a screenshot · Scroll for more space"
-            let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.boardInk.withAlphaComponent(0.5)]
-            let hintSize = (hint as NSString).size(withAttributes: small)
-            (hint as NSString).draw(at: NSPoint(x: max(90, (bounds.width-hintSize.width)/2), y: bounds.height*0.42+40), withAttributes: small)
-        }
     }
     private func textRect(_ text: BoardText) -> Rect { text.layoutBounds }
     private func drawSelection(_ rect: Rect) {

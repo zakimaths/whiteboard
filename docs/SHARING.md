@@ -4,7 +4,7 @@ Ready-to-use public materials:
 
 - [Everyday idea board](demos/an-idea-before-it-disappears.png): the app's general-purpose starting point.
 - [Heat diffusion](demos/pde-heat.png), [wave motion](demos/pde-wave.png) and [Poisson field](demos/pde-poisson.png): optional GitHub showcase boards with typeset equations and diagrams.
-- [Repository](https://github.com/zakimaths/whiteboard), [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.0) and [demo walkthrough](DEMOS.md).
+- [Repository](https://github.com/zakimaths/whiteboard), [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.1) and [demo walkthrough](DEMOS.md).
 
 The repository excludes personal libraries, the original user screenshot, earlier conversation-specific reports, development caches and diagnostic logs. Demo media includes sample content only. The release and checklist identify implemented features and outstanding work explicitly.
 

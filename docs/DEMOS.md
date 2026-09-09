@@ -1,6 +1,6 @@
 # Try Whiteboard
 
-[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-macOS-arm64.zip) · [General samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-General-Samples.zip) · [Optional GitHub academic samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-GitHub-Samples.zip)
+[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.7.1/Whiteboard-0.7.1-macOS-arm64.zip) · [General samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-General-Samples.zip) · [Optional GitHub academic samples](https://github.com/zakimaths/whiteboard/releases/download/v0.7.0/Whiteboard-0.7.0-GitHub-Samples.zip)
 
 Whiteboard is a multi-use canvas for ideas, everyday notes, screenshots, explanations and academic work. Click **Demo** for three general examples: **An idea before it disappears**, **Give an idea some shape**, and **Keep what worked**. **My ideas** returns to your personal board. No account or TeX installation is needed. The app is an early preview and is not Apple-notarised; see [installation notes](../README.md#open-and-use).
 

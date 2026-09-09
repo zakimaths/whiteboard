@@ -8,7 +8,7 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.7.1) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
