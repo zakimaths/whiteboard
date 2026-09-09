@@ -1,0 +1,20 @@
+\begin{tikzpicture}[>=Stealth,font=\sffamily\small]
+\definecolor{blue}{RGB}{29,99,176}
+\definecolor{teal}{RGB}{0,124,116}
+\definecolor{amber}{RGB}{184,100,33}
+\foreach \x in {0,1.5,3,4.5,6} \draw[black!7] (\x,-2.2)--(\x,2.2);
+\foreach \y in {-2,-1,0,1,2} \draw[black!7] (0,\y)--(6,\y);
+\draw[->] (0,0)--(6.45,0) node[right] {$\xi=x/L$};
+\draw[->] (0,-2.2)--(0,2.6) node[above] {$u/A$};
+\node[left] at (0,2) {$1$}; \node[left] at (0,-2) {$-1$};
+\node[below right] at (6,0) {$1$}; \node[below left] at (0,0) {$0$};
+\draw[blue,very thick,domain=0:1,samples=101] plot ({6*\x},{2*sin(180*\x)});
+\draw[teal,very thick,dashed,domain=0:1,samples=101] plot ({6*\x},{2*cos(45)*sin(180*\x)});
+\draw[black!50,thick,densely dotted] (0,0)--(6,0);
+\draw[amber,very thick,dash dot,domain=0:1,samples=101] plot ({6*\x},{-2*sin(180*\x)});
+\foreach \x in {0,6} \fill (\x,0) circle (2.2pt);
+\draw[blue,very thick] (0,-2.85)--(0.45,-2.85); \node[right] at (0.5,-2.85) {$\theta=0$};
+\draw[teal,very thick,dashed] (2,-2.85)--(2.45,-2.85); \node[right] at (2.5,-2.85) {$\theta=1/4$};
+\draw[amber,very thick,dash dot] (4.4,-2.85)--(4.85,-2.85); \node[right] at (4.9,-2.85) {$\theta=1$};
+\node[anchor=west] at (0,-3.5) {Dotted: $\theta=1/2$. Fixed ends; energy is conserved.};
+\end{tikzpicture}

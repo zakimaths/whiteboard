@@ -279,7 +279,7 @@ check("Fictional demo assets export and remain independent of a personal library
         let idea = try personal.create(name:"Personal thought"), before = try Data(contentsOf:idea.appendingPathComponent("board.json"))
         try temporaryLibrary { demo in
             _ = try DemoContent.populate(demo)
-            let samples = try demo.list(); try expect(samples.count == 4)
+            let samples = try demo.list(); try expect(samples.count == 6)
             try expect(samples.contains {$0.status == .finished})
             for item in samples {
                 var board = try demo.load(item.url)
@@ -537,10 +537,115 @@ check("Recovery rejects traversal, corrupt snapshots and symlinked history witho
         try expect(try library.load(source).isEmpty)
     }
 }
+check("PDE demos retain twelve editable vector assets and upgrade without overwriting existing ideas") {
+    try temporaryLibrary { library in
+        let personal = try library.create(name:"Existing idea"), before = try Data(contentsOf:personal.appendingPathComponent("board.json"))
+        let added = try PDEExamples.installMissing(library); try expect(added.count == 3)
+        for url in added {
+            let board = try library.load(url); try expect(board.images.count == 4)
+            for item in board.images {
+                try expect(item.tex != nil && item.vectorAsset != nil)
+                let file = url.appendingPathComponent("assets").appendingPathComponent(item.vectorAsset!)
+                let pdf = CGPDFDocument(file as CFURL); try expect(pdf?.numberOfPages == 1)
+                try expect(CGImageSourceCreateWithURL(url.appendingPathComponent("assets").appendingPathComponent(item.asset) as CFURL,nil) != nil)
+            }
+        }
+        let renamed = try library.move(added[0],to:.finished,name:"My PDE notes")
+        var edited = try library.load(renamed); edited.texts.append(BoardText(text:"Personal annotation",origin:Point(10,10))); try library.save(edited,at:renamed)
+        try expect(try PDEExamples.installMissing(library).isEmpty)
+        try expect(try library.load(renamed) == edited)
+        try expect(try Data(contentsOf:personal.appendingPathComponent("board.json")) == before)
+        // A user may remove every demo after the one-time migration marker is written.
+        for item in try library.list() { try FileManager.default.removeItem(at:item.url) }
+        let restarted = try DemoContent.populate(library)
+        try expect(try library.list().count == 3)
+        try expect(!(try library.load(restarted)).isEmpty)
+    }
+}
+func trayPNG() throws -> Data {
+    let bitmap = CGContext(data:nil,width:40,height:30,bitsPerComponent:8,bytesPerRow:160,space:CGColorSpaceCreateDeviceRGB(),bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+    bitmap.setFillColor(CGColor(red:0.2,green:0.5,blue:0.9,alpha:1)); bitmap.fill(CGRect(x:0,y:0,width:40,height:30))
+    let bytes = NSMutableData(), output = CGImageDestinationCreateWithData(bytes,"public.png" as CFString,1,nil)!
+    CGImageDestinationAddImage(output,bitmap.makeImage()!,nil); try expect(CGImageDestinationFinalize(output)); return bytes as Data
+}
+check("Capture tray survives reopening and placed copies survive removing the reference") {
+    try temporaryLibrary { library in
+        let tray = CaptureTray(libraryRoot:library.root), png = try trayPNG()
+        let first = try tray.add(png,extension:"png",title:"Question / one")
+        let second = try tray.add(png,extension:"PNG",title:"Question / one")
+        let reopened = CaptureTray(libraryRoot:library.root)
+        try expect(try reopened.references().count == 2 && first.id != second.id)
+        let (item,data) = try reopened.data(for:first.id)
+        try expect(data == png && item.width == 40 && item.height == 30 && !item.title.contains("/"))
+        let boardURL = try library.create(); var board = Board()
+        let asset = try library.importAsset(data:data,extension:item.fileExtension,to:boardURL)
+        board.images = [BoardImage(asset:asset,frame:Rect(20,30,item.width,item.height))]; try library.save(board,at:boardURL)
+        try reopened.remove(first.id)
+        try expect(try reopened.references().map(\.id) == [second.id])
+        try expect(try Data(contentsOf:boardURL.appendingPathComponent("assets").appendingPathComponent(asset)) == png)
+        try expect(try library.load(boardURL) == board)
+    }
+}
+check("Capture tray enforces item, file and total byte limits without evicting references") {
+    try temporaryLibrary { library in
+        let tray = CaptureTray(libraryRoot:library.root), png = try trayPNG()
+        for i in 0..<8 { try tray.add(png,extension:"png",title:"Reference \(i)") }
+        let before = try tray.references()
+        try rejects {_ = try tray.add(png,extension:"png",title:"Overflow")}
+        try expect(try tray.references() == before)
+        for item in before { try tray.remove(item.id) }
+        var large = png; large.append(Data(repeating:0,count:CaptureTray.imageByteLimit-png.count))
+        try tray.add(large,extension:"png",title:"Large one"); try tray.add(large,extension:"png",title:"Large two")
+        try rejects {_ = try tray.add(png,extension:"png",title:"Byte overflow")}
+        large.append(0); try rejects {_ = try tray.add(large,extension:"png",title:"File overflow")}
+        try expect(try tray.references().count == 2)
+    }
+}
+check("Failed capture writes clean up incomplete entries and preserve existing references") {
+    try temporaryLibrary { library in
+        let initial = CaptureTray(libraryRoot:library.root), png = try trayPNG()
+        let original = try initial.add(png,extension:"png",title:"Keep this")
+        for target in ["image.png","reference.json"] {
+            let failing = CaptureTray(libraryRoot:library.root,atomicWrite:{data,url in
+                if url.lastPathComponent == target { throw NSError(domain:NSCocoaErrorDomain,code:NSFileWriteOutOfSpaceError) }
+                try data.write(to:url,options:.atomic)
+            })
+            try rejects {_ = try failing.add(png,extension:"png",title:"Failed")}
+            try expect(try failing.references() == [original])
+            try expect(try FileManager.default.contentsOfDirectory(atPath:initial.root.path).count == 1)
+        }
+        try expect(try initial.data(for:original.id).1 == png)
+    }
+}
+check("Capture trays stay separate across libraries and reject non-image content") {
+    try temporaryLibrary { library in
+        let other = try Library(root:library.root.appendingPathComponent("Separate library"))
+        let personal = CaptureTray(libraryRoot:library.root), demo = CaptureTray(libraryRoot:other.root)
+        try personal.add(trayPNG(),extension:"png",title:"Personal reference")
+        try expect(try demo.references().isEmpty)
+        try rejects {_ = try demo.add(Data("not an image".utf8),extension:"png",title:"Invalid")}
+        try rejects {_ = try demo.add(trayPNG(),extension:"../png",title:"Unsafe")}
+        try expect(try personal.references().count == 1 && demo.references().isEmpty)
+    }
+}
+check("Capture tray rejects symlinked roots and substituted assets") {
+    try temporaryLibrary { library in
+        let tray = CaptureTray(libraryRoot:library.root), png = try trayPNG()
+        let item = try tray.add(png,extension:"png",title:"Reference")
+        let asset = tray.root.appendingPathComponent(item.id.uuidString).appendingPathComponent("image.png")
+        let outside = library.root.appendingPathComponent("original.png"); try png.write(to:outside)
+        try FileManager.default.removeItem(at:asset); try FileManager.default.createSymbolicLink(at:asset,withDestinationURL:outside)
+        try rejects {_ = try tray.data(for:item.id)}
+        let other = try Library(root:library.root.appendingPathComponent("Other")), linked = CaptureTray(libraryRoot:other.root)
+        try FileManager.default.createSymbolicLink(at:linked.root,withDestinationURL:tray.root)
+        try rejects {_ = try linked.references()}
+        try expect(try Data(contentsOf:outside) == png)
+    }
+}
 if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
     check("Real LaTeX rendering preserves editable source and vector assets through copy/reopen") {
         try temporaryLibrary { library in
-            let source = TeXSource(kind:.latex,code:#"x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"#)
+            let source = try PDEExamples.source("heat-model",kind:.latex)
             let render = try TeXCompiler.compile(source)
             try expect(render.pdf.count > 100 && render.png.count > 100 && render.width > render.height)
             let url = try library.create(); var board = Board()
@@ -558,7 +663,7 @@ if ProcessInfo.processInfo.environment["WHITEBOARD_TEX_CHECKS"] == "1" {
         }
     }
     check("Real TikZ diagram renders without a persistent engine") {
-        let source = TeXSource(kind:.tikz,code:#"\draw[blue,thick,->] (0,0) -- (3,1) node[right] {$v$};"#)
+        let source = try PDEExamples.source("poisson-diagram",kind:.tikz)
         let render = try TeXCompiler.compile(source)
         try expect(render.width > 50 && render.height > 10)
         if let output = ProcessInfo.processInfo.environment["WHITEBOARD_TEST_ARTIFACTS"] { try render.png.write(to:URL(fileURLWithPath:output).appendingPathComponent("tikz-check.png")) }

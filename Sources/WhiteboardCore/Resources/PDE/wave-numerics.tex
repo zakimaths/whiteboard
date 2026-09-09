@@ -1,0 +1,10 @@
+\begin{aligned}
+r&=c\Delta t/\Delta x,\qquad 0<r\le1,\\[5pt]
+u_j^{n+1}&=2u_j^n-u_j^{n-1}
++r^2(u_{j-1}^n-2u_j^n+u_{j+1}^n),\\[5pt]
+u_j^1&=u_j^0+\Delta t\,g_j
++\tfrac12r^2(u_{j-1}^0-2u_j^0+u_{j+1}^0),\\[4pt]
+g_j&=u_t(x_j,0)=0,\qquad u_0^n=u_N^n=0,\\[4pt]
+\text{error}&=O(\Delta t^2+\Delta x^2)
+\quad\text{for smooth solutions.}
+\end{aligned}

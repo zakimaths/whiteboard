@@ -8,6 +8,7 @@ mkdir -p build/Whiteboard.app/Contents/MacOS build/Whiteboard.app/Contents/Resou
 cp .build/release/Whiteboard build/Whiteboard.app/Contents/MacOS/Whiteboard
 cp Resources/Info.plist build/Whiteboard.app/Contents/Info.plist
 cp Resources/AppIcon.icns build/Whiteboard.app/Contents/Resources/AppIcon.icns
+ditto .build/release/Whiteboard_WhiteboardCore.bundle/PDE build/Whiteboard.app/Contents/Resources/PDE
 # Finder can attach layout metadata after a development launch; codesign rejects it.
 xattr -dr com.apple.FinderInfo build/Whiteboard.app 2>/dev/null || true
 codesign --force --sign - build/Whiteboard.app

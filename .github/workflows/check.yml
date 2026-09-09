@@ -17,6 +17,8 @@ jobs:
           persist-credentials: false
       - name: Check document behaviour
         run: bash scripts/check.sh
+      - name: Check PDE model identities
+        run: python3 scripts/check_pde_models.py
       - name: Build the native app
         run: bash scripts/build.sh
       - name: Verify signature and package

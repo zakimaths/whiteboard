@@ -1,3 +1,19 @@
+# Whiteboard 0.6.0 · collect references and work through PDEs
+
+- The capture tray keeps up to eight image references in the current ideas library. Add files, paste an image or use Capture, then click a filename to place an independent copy on a board. Tray entries persist across restarts; removing one leaves placed copies intact.
+- Storage is bounded to 64 MiB of committed compressed images, with a 32 MiB per-image limit. The tray does not decode thumbnails, monitor the clipboard or run an idle worker.
+- Three detailed academic boards cover heat diffusion, a fixed string and a Poisson problem. Each includes model assumptions, boundary/initial conditions, exact solutions, checks, a numerical scheme and an original labelled vector diagram.
+- All twelve LaTeX/TikZ objects retain their editable source and vector PDFs. Saved demos open without TeX; rendering edited source needs a local TeX installation. These are worked examples, not an interactive PDE solver.
+- Six editable sample boards, public PNG/PDF previews and an updated walkthrough are included. Existing demo libraries receive the PDE examples once without replacing earlier work.
+
+**47 local checks pass: 44 core and 3 real LaTeX/TikZ checks.** Three additional independent numerical checks cover the PDE identities, data, energies and Poisson stencil convergence. All twelve maths assets compiled with real TeX; full board exports were visually inspected. Native testing covered tray import, placement, removal, paste, restart persistence and reopening equation source. The empty-library path after removing all migrated demos is also covered.
+
+The tray currently uses filename buttons; thumbnails, dragging from the tray and tray-removal undo remain future work. Interactive screen capture still needs end-to-end permission testing. Earlier resource measurements are historical; this release adds no continuous maths rendering or tray polling. [Capture tray](CAPTURE-TRAY.md), [PDE models](PDE-MODELS.md), [validation](VALIDATION.md).
+
+**GitHub preview for Apple silicon; ad-hoc signed, not Apple-notarised.** [Demos and downloads](DEMOS.md), [full feature status](IMPLEMENTATION.md).
+
+---
+
 # Whiteboard 0.5.0 · keep an earlier version
 
 - File → Save checkpoint keeps the current saved version. File → Recovery history lists dated snapshots and restores the selected version as a separate unfinished idea.

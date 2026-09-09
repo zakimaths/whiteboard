@@ -6,8 +6,9 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.executable(name: "Whiteboard", targets: ["WhiteboardApp"])],
     targets: [
-        .target(name: "WhiteboardCore"),
+        .target(name: "WhiteboardCore", resources: [.copy("Resources/PDE")]),
         .executableTarget(name: "WhiteboardApp", dependencies: ["WhiteboardCore"]),
+        .executableTarget(name: "WhiteboardPDEAssets", dependencies: ["WhiteboardCore"], path: "Tools/PDEAssets"),
         .executableTarget(name: "WhiteboardSamples", dependencies: ["WhiteboardCore"], path: "Tools/Samples"),
         .executableTarget(name: "WhiteboardChecks", dependencies: ["WhiteboardCore"], path: "Tests/WhiteboardCoreTests")
     ]

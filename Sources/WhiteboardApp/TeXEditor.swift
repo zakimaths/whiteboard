@@ -22,14 +22,6 @@ enum TeXEditor {
         return alert.runModal() == .alertFirstButtonReturn ? TeXSource(kind:kind,code:editor.string) : nil
     }
     static func sample(_ kind: TeXKind) -> String {
-        if kind == .latex { return #"x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}"# }
-        return #"""
-        \begin{tikzpicture}[>=Stealth, scale=1.2]
-          \draw[->] (-0.3,0) -- (3.3,0) node[right] {$x$};
-          \draw[->] (0,-0.3) -- (0,3.3) node[above] {$y$};
-          \draw[blue, thick, domain=0:2.6, samples=50]
-            plot (\x,{0.4*\x*\x}) node[right] {$y=0.4x^2$};
-        \end{tikzpicture}
-        """#
+        return (try? PDEExamples.source(kind == .latex ? "heat-model" : "heat-diagram",kind:kind).code) ?? #"u_t=\kappa u_{xx}"#
     }
 }

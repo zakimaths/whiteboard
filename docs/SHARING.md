@@ -2,37 +2,32 @@
 
 Ready-to-use public materials:
 
-- [Reversible screenshot crop](demos/crop-workspace.png): actual 0.4 app preview with fictional study content.
-- [Shapes and pinned shelf](demos/shapes-workspace.png): actual 0.3 app preview.
-- [Academic workspace](demos/academic-workspace.png): actual app preview export with fictional study content.
-- [LaTeX and TikZ workspace](demos/maths-workspace.png): actual rendered maths objects in the app.
-- [Everyday-ideas example](demos/an-idea-before-it-disappears.png): a content export.
-- [Repository](https://github.com/zakimaths/whiteboard) and [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.5.0).
+- [Heat diffusion](demos/pde-heat.png), [wave motion](demos/pde-wave.png) and [Poisson field](demos/pde-poisson.png): original detailed PDE boards with typeset equations and diagrams.
+- [Capture tray](demos/tray-workspace.png): actual app preview using the heat-equation reference.
+- [Repository](https://github.com/zakimaths/whiteboard) and [preview release](https://github.com/zakimaths/whiteboard/releases/tag/v0.6.0).
 
 The repository excludes personal libraries, the original user screenshot, earlier conversation-specific reports, development caches and diagnostic logs. Demo media includes sample content only. The release and checklist identify implemented features and outstanding work explicitly.
 
 ## X draft
 
-I’m building Whiteboard: a quiet macOS canvas for sudden ideas, screenshots and academic working.
+I’m building Whiteboard: a quiet Mac canvas for ideas and academic working.
 
-Sketch-to-shape, reversible screenshot crops, pinned ideas, LaTeX + TikZ.
+Now with a capture tray, recovery checkpoints, and detailed heat, wave and Poisson models using editable LaTeX + TikZ.
 
-Try the editable demo in the GitHub preview:
+Try the demo:
 https://github.com/zakimaths/whiteboard
 
 ## LinkedIn draft
 
-I started with a sketch for a whiteboard that could sit over my desktop: somewhere to catch an idea, annotate a screenshot, or work through a problem without losing the thought while switching apps.
+I wanted somewhere to catch an idea, collect a screenshot and work through a problem without losing the thread while switching apps.
 
-The native macOS preview now has a shelf of real saved filenames, unfinished/finished states, local autosave, screenshot annotations, editable LaTeX equations and TikZ diagrams, and automatic shape recognition: draw naturally with the pen, lift, and a clear shape snaps into place. Undo brings the original handwriting back. Ideas can be pinned and reordered on the shelf. Screenshots can now be cropped and restored, with attached annotations staying aligned when moved or resized.
+Whiteboard is my native macOS take on that: a desktop canvas, a shelf of real saved filenames, local autosave, automatic shapes and recovery checkpoints. The new capture tray collects references before placing copies on a board.
 
-I’m prioritising the product itself: save and recovery behaviour, useful controls, and keeping unnecessary background work out. The repository includes the optimisation research, test results, honest limitations and the full feature checklist.
+The academic examples now use detailed PDE models: heat diffusion, a fixed string and a Poisson field. Each includes boundary conditions, an exact solution, a numerical scheme and original vector diagrams. The LaTeX and TikZ sources remain editable. Saved examples open without installing TeX; these are worked models rather than an interactive PDE solver.
 
-The latest update adds manual checkpoints and dated recovery history. Restoring opens a separate idea, preserving the current version. Snapshots share image assets and run during edits instead of on a background timer.
+I’m prioritising product quality and measured resource use. The repository includes the tests, mathematical consistency checks, optimisation notes and remaining limitations.
 
-The GitHub download includes a Demo button: four editable examples in a separate workspace, with a quick return to your own ideas. You can also view the examples in the repository without installing anything.
-
-It’s an early preview with more to build. The demos use fictional content and show the actual app. Distribution is through GitHub for now.
+Six editable examples are available through the Demo button, with a quick return to your own ideas. Public PNG/PDF previews are available without installing the app. It’s an early GitHub preview; there is no App Store listing.
 
 https://github.com/zakimaths/whiteboard
 

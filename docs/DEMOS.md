@@ -1,73 +1,51 @@
 # Try Whiteboard
 
-**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.5.0/Whiteboard-0.5.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.5.0/Whiteboard-Sample-Ideas.zip)**
+**[Download the Mac app](https://github.com/zakimaths/whiteboard/releases/download/v0.6.0/Whiteboard-0.6.0-macOS-arm64.zip)** · **[Download editable sample boards](https://github.com/zakimaths/whiteboard/releases/download/v0.6.0/Whiteboard-Sample-Ideas.zip)**
 
-You can view every image on this page without installing the app or signing in. To try the actual product on an Apple silicon Mac, download the ZIP, open Whiteboard, then click **Demo** at the top. Use **My ideas** to return to your own workspace. The demo is local and editable, with no account or trial expiry. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
+View the examples here without installing anything. On an Apple silicon Mac, open Whiteboard and click **Demo**. Six editable boards open in a separate local library; **My ideas** returns to your previous personal board. No account, trial expiry or TeX installation is needed to view and annotate the samples. The app is an early preview and is not Apple-notarised; see the [installation notes](../README.md#open-and-use).
 
-Demo boards live separately in `~/Library/Application Support/Whiteboard/Demo Ideas`. Changes are retained when you leave and return. The app normally relaunches into your personal library; developers can launch the executable with `--demo` to open directly in the demo.
+Demo edits persist in `~/Library/Application Support/Whiteboard/Demo Ideas`. Existing demo libraries receive the three PDE boards once, retaining earlier examples and edits. The app normally relaunches into the personal library; developers can use `--demo` to enter the demo directly.
 
-The examples use original fictional content. The workspace images were exported by the running app itself; they are not design mockups or desktop recordings. The other PNG/PDF files are content exports from the same document renderer.
+## Detailed academic models
 
-## Academic working
+Open **Heat diffusion — modes and decay**, **Wave motion — a fixed string**, or **Poisson — a field on the unit square**. Each contains a governing PDE, boundary/initial data, exact solution, energy or residual check, vector diagram and numerical scheme. Scroll to the lower sections, or use **Fit** and zoom into the part you want to study.
 
-Click **Demo**, then **One question, two attempts**. Select the question image and drag its bottom-right handle: its annotation stays attached. Undo, or use **Edit → Fresh copy without annotations** for another attempt. Export the selection or the whole board.
+![Heat-diffusion working board](demos/pde-heat.png)
 
-![Actual academic workspace](demos/academic-workspace.png)
+[Heat PDF](demos/pde-heat.pdf) · [Wave diagram and equations](demos/pde-wave.png) · [Wave PDF](demos/pde-wave.pdf) · [Poisson diagram and equations](demos/pde-poisson.png) · [Poisson PDF](demos/pde-poisson.pdf)
 
-## Keep the useful part of a screenshot
+With **Select**, double-click any equation or diagram to reopen its LaTeX/TikZ source. Rendering an edited version requires local TeX; opening the saved examples does not. These are worked examples and exact-solution plots, not an interactive numerical solver. [Model assumptions and mathematical checks](PDE-MODELS.md).
 
-In **One question, two attempts**, select the question image, press **C** and drag around the question lines. Press **Return** or click **Apply crop**. Resize or move the result: attached ink stays aligned. Switch to another shelf idea and return to see the saved crop. **Edit → Restore full image** brings the original back. Escape cancels a crop before applying it.
+## Collect a reference, then use it
 
-![Actual 0.4 workspace with a cropped question and aligned annotation](demos/crop-workspace.png)
+Open the tray icon below the camera. Use **Add files** to collect saved images, **Paste** for a clipboard image, or **Capture** for a user-initiated screenshot. Try the [heat-model PNG](../Sources/WhiteboardCore/Resources/PDE/heat-model.png) and [Poisson-field PNG](../Sources/WhiteboardCore/Resources/PDE/poisson-diagram.png).
 
-Cropping changes the image, not separate ink. Editable boards retain the original screenshot. [Crop and export details](CROPPING.md).
+Create a fresh idea and click a tray filename to place a copy. Select it to move, resize or annotate. Removing its tray entry leaves the placed copy intact. Close and reopen the app: the board and remaining tray entries are retained.
 
-To reach another app temporarily, hold **Command–Shift–Space**, interact underneath, then release to return. **Shift–Command–B** or the menu-bar Show action remains available. Physical held-key interaction across applications is still awaiting dedicated testing.
+![Actual capture tray and a placed heat-equation reference](demos/tray-workspace.png)
 
-## Shapes and your shelf
+The screen-capture permission path still needs dedicated validation. [Tray controls, storage and limits](CAPTURE-TRAY.md).
 
-Open **Give an idea some shape**. With the **Pen** and **Auto shapes** on, draw a circle, box, arrow or line below the example. Lift the pen: a confident match becomes a precise shape. Press **Undo** once to get your original handwriting back; a second Undo removes the stroke. Hold **Shift** while drawing to keep a stroke freehand, or switch **Auto shapes** off.
+## Crop a PDE screenshot
 
-Explicit tools are still available: **L**, **A**, **R** and **O** for line, arrow, rectangle and ellipse. Shift constrains those tools to 45° angles or equal sides. Select and move any shape just like ink.
+Place the heat-model PNG from the tray, select it, press **C** and drag around the equation lines you want to keep. Press **Return** or **Apply crop**. Escape cancels. **Edit → Restore full image** brings the original screenshot back. Attached ink stays aligned when moving or resizing. Cropping works on screenshots, while the original vector maths objects remain source-editable. [Crop details](CROPPING.md).
 
-Control-click its shelf card → **Pin idea**. It moves ahead of unpinned ideas. **Move earlier / later** arranges cards within their pinned or unpinned group. Try **Finish**, then **Reopen**: the pin stays with the idea.
+## Return to an earlier attempt
 
-![Actual 0.3 app workspace with shapes and a pinned idea](demos/shapes-workspace.png)
+On a PDE demo board, choose **File → Save checkpoint**, then add a line or note. Control-click its shelf card → **Recovery history…** → choose the checkpoint → **Recover as copy**. The recovered idea contains the earlier version; the original retains your later edit. [Recovery limits](RECOVERY.md).
 
-## LaTeX and TikZ
+## Shapes, shelf and everyday thoughts
 
-Create a fresh board. Use **File → Insert LaTeX…** and render the included quadratic-formula example. Then use **File → Insert TikZ…** for the included curve. With Select active, double-click either item to reopen its source. The screenshot below shows this interaction's saved results.
+Open **Give an idea some shape**. With **Pen** and **Auto shapes** on, draw a circle, box, arrow or line. A confident match snaps on pen-up; Undo brings back the original ink. Hold Shift to keep one stroke freehand. Explicit L/A/R/O tools remain available. [Gesture details](SHAPES.md).
 
-![Actual LaTeX and TikZ workspace](demos/maths-workspace.png)
+Control-click a shelf card to pin it or move it earlier/later. Try Finish and Reopen; the pin remains attached to the idea. **An idea before it disappears** provides a general-purpose thought board, while **Keep what worked** begins in Finished.
 
-This demo requires local TeX to render new objects. [Supported input and setup](MATHS.md).
-
-See [automatic shapes](SHAPES.md) for gesture details and the current recognition limits.
-
-## Everyday ideas
-
-The sample **An idea before it disappears** is an open-ended thought rather than an assignment. Add a note, hide the board, reopen it, and mark it finished. The shelf uses its actual filename and folder status.
-
-![Everyday-ideas content export](demos/an-idea-before-it-disappears.png)
-
-The **Keep what worked** sample starts in Finished. Its status can be changed back to Unfinished.
-
-## Try recovery without losing your current attempt
-
-Open **One question, two attempts** and choose **File → Save checkpoint**. Draw an extra line beside the working. Control-click that idea on the shelf → **Recovery history…** → select the checkpoint → **Recover as copy**.
-
-The recovered idea contains the earlier version; the original keeps your later line. Click either shelf card to compare them. Recovery works with the sample's screenshot and attached annotation. These demo edits stay in the separate demo library; **My ideas** returns to your personal workspace.
-
-[Snapshot spacing, storage budget and recovery limits](RECOVERY.md).
-
-## Reproducible sample files
+## Reproduce the samples
 
 ```sh
 bash scripts/make_samples.sh
 ```
 
-This creates a new `build/Sample Ideas` library and PNG/PDF exports in `build/Sample Exports`. It refuses to overwrite an existing sample library. Choose the generated library through **File → Choose ideas folder…** to explore it separately from personal work.
+This creates a fresh six-board library and PNG/PDF exports under `build`. It refuses to overwrite an existing sample library. The release's sample ZIP contains the same six generated boards, independent of personal and test-session libraries.
 
-The release also includes an editable sample-library ZIP. These four generated sample boards do not require TeX. The maths workspace demonstrates the separate source editor with its built-in examples.
-
-The academic and maths screenshots were captured from 0.2; the shapes workspace is from 0.3; the cropped workspace is from 0.4. All are actual app view exports.
+All current maths previews use the PDE examples. They are exports from the app's document renderer; the capture-tray image is an actual running-app view export. Earlier-release media remains in the repository history and older releases. No surrounding desktop is captured in the workspace preview.

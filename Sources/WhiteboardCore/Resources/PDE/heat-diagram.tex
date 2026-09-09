@@ -1,0 +1,20 @@
+\begin{tikzpicture}[>=Stealth,font=\sffamily\small]
+\definecolor{ink}{RGB}{41,52,57}
+\definecolor{blue}{RGB}{29,99,176}
+\definecolor{teal}{RGB}{0,124,116}
+\definecolor{amber}{RGB}{184,100,33}
+\foreach \x in {0,1.5,3,4.5,6} \draw[black!7] (\x,0)--(\x,3.2);
+\foreach \y in {0,0.75,1.5,2.25,3} \draw[black!7] (0,\y)--(6,\y);
+\draw[->,ink] (0,0)--(6.4,0) node[right] {$\xi=x/L$};
+\draw[->,ink] (0,0)--(0,3.5) node[above] {$u/U_0$};
+\foreach \x/\v in {0/0,1.5/0.25,3/0.5,4.5/0.75,6/1}
+  \draw[ink] (\x,0)--(\x,-0.06) node[below=3pt] {$\v$};
+\foreach \y/\v in {1.5/0.5,3/1} \node[left] at (0,\y) {$\v$};
+\draw[blue,very thick,domain=0:1,samples=121] plot ({6*\x},{3*(sin(180*\x)+0.35*sin(540*\x))});
+\draw[teal,very thick,dashed,domain=0:1,samples=121] plot ({6*\x},{3*(exp(-pi*pi*0.04)*sin(180*\x)+0.35*exp(-9*pi*pi*0.04)*sin(540*\x))});
+\draw[amber,very thick,densely dotted,domain=0:1,samples=121] plot ({6*\x},{3*(exp(-pi*pi*0.12)*sin(180*\x)+0.35*exp(-9*pi*pi*0.12)*sin(540*\x))});
+\draw[blue,very thick] (0,-0.85)--(0.55,-0.85); \node[right] at (0.6,-0.85) {$\tau=0$};
+\draw[teal,very thick,dashed] (2,-0.85)--(2.55,-0.85); \node[right] at (2.6,-0.85) {$\tau=0.04$};
+\draw[amber,very thick,densely dotted] (4.4,-0.85)--(4.95,-0.85); \node[right] at (5,-0.85) {$\tau=0.12$};
+\node[anchor=west,text=ink] at (0,-1.5) {Exact modal solution: the third mode decays nine times faster.};
+\end{tikzpicture}

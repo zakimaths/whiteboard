@@ -14,29 +14,24 @@ Editing and rendering a duplicated item creates new assets; the original item st
 
 LaTeX accepts a maths fragment; surrounding `$…$`, `$$…$$`, `\(…\)` or `\[…\]` delimiters are optional.
 
-```latex
-x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
-```
+The default LaTeX fragment is the heat-diffusion initial-boundary value problem:
 
 ```latex
 \begin{aligned}
-f(x) &= x^2 \\
-f'(x) &= 2x \\
-f'(2) &= 4
+\partial_t u &= \kappa\,\partial_{xx}u,
+&&0<x<L,\quad t>0,\\[4pt]
+u(0,t)&=u(L,t)=0, &&\kappa>0,\\[4pt]
+u(x,0)&=U_0\!\left[\sin\!\frac{\pi x}{L}
+       +0.35\sin\!\frac{3\pi x}{L}\right],\\[7pt]
+\xi&=x/L,\qquad \tau=\kappa t/L^2,
+&&v=u/U_0,\\
+v_\tau&=v_{\xi\xi}, &&0<\xi<1.
 \end{aligned}
 ```
 
-TikZ accepts a `tikzpicture` or its inner drawing commands.
+The default TikZ example plots its exact modal solution at three dimensionless times. [Editable TikZ source](../Sources/WhiteboardCore/Resources/PDE/heat-diagram.tex). TikZ accepts a `tikzpicture` or its inner drawing commands.
 
-```latex
-\begin{tikzpicture}[>=Stealth]
-  \node[draw,rounded corners] (a) {Capture};
-  \node[draw,rounded corners,right=of a] (b) {Think};
-  \node[draw,rounded corners,right=of b] (c) {Keep};
-  \draw[->] (a) -- (b);
-  \draw[->] (b) -- (c);
-\end{tikzpicture}
-```
+The six demo boards include three detailed PDE models: heat diffusion, wave motion and a Poisson field. Every model includes conditions, a closed-form solution, a labelled diagram and a numerical scheme. [Full models, figures, source and checks](PDE-MODELS.md).
 
 The wrapper provides `amsmath`, `amssymb`, and, for TikZ, `arrows.meta`, `calc`, `positioning`, `shapes.geometric` and `decorations.pathreplacing`. This is an editor for individual equations and diagrams, not a full LaTeX document editor. Handwritten equation recognition is a separate planned feature.
 
@@ -52,4 +47,4 @@ The compiler disables shell escape, restricts file access to its temporary worki
 
 TikZ's official [format guide](https://tikz.dev/drivers) documents loading it through LaTeX; its [installation guide](https://tikz.dev/installation) describes the package requirements. The [standalone manual](https://tug.ctan.org/macros/latex/contrib/standalone/standalone.pdf) documents cropping output to its contents. TeX Live's [2026 changes](https://www.tug.org/texlive/bugs.html) explain why `openin_any` cannot be relied on for input isolation in newer distributions.
 
-Local integration checks rendered a quadratic-formula equation and a TikZ arrow, copied and reopened the equation with source and vector asset intact, rejected invalid TeX and rejected an attempt to read a temporary fixture outside the permitted working directory. These checks supplement the general board tests; they do not establish compatibility with every TeX installation or package.
+Local integration checks rendered the heat-equation model and Poisson-field TikZ diagram, copied and reopened the equation with source and vector asset intact, rejected invalid TeX and rejected an attempt to read a temporary fixture outside the permitted working directory. These checks supplement the general board tests; they do not establish compatibility with every TeX installation or package.

@@ -4,11 +4,11 @@ A quiet macOS canvas for sudden ideas, screenshots and working things out.
 
 Write over your desktop. Keep unfinished thoughts on a small filename shelf. Come back when they are useful. Add editable LaTeX equations and TikZ diagrams when a thought needs more precision.
 
-![The actual Whiteboard workspace with fictional academic sample content](docs/demos/academic-workspace.png)
+![Worked heat-diffusion model exported by Whiteboard](docs/demos/pde-heat.png)
 
 **Native preview · Apple silicon · Local files · No account**
 
-[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.5.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
+[Download the app](https://github.com/zakimaths/whiteboard/releases/tag/v0.6.0) · [Try the demos](docs/DEMOS.md) · [Full feature checklist](docs/IMPLEMENTATION.md) · [Research and optimisation](docs/OPTIMISATION-RESEARCH.md)
 
 ## What works today
 
@@ -17,6 +17,8 @@ Write over your desktop. Keep unfinished thoughts on a small filename shelf. Com
 - Automatic shapes: sketch a line, arrow, box, circle or ellipse with the pen and it snaps when you lift. Undo restores your original ink. Recognition stays local and runs only at pen-up.
 - Explicit shape tools are also available, with Shift constraints and the same undo/save/export behaviour as ink.
 - Drop or paste screenshots; select, crop, restore, move, resize and annotate them. Attached ink follows movement and resizing.
+- A capture tray for collecting image files, pasted images and screenshots before placing copies on boards. References persist separately for each library.
+- Detailed heat, wave and Poisson examples with editable LaTeX equations, vector TikZ diagrams, boundary conditions and solution checks.
 - A collapsible top shelf whose buttons read real filenames. Red is unfinished, green is finished; labels and symbols accompany the colours.
 - Pin important ideas and move them earlier or later on the shelf. Preferences stay separate for each library.
 - Local autosave, save/reopen, copies, archive, manual checkpoints and dated recovery history, restored as separate files.
@@ -30,7 +32,7 @@ This is a working preview, not the complete 84-feature product. Thumbnail cards,
 
 Unzip the download and open **Whiteboard.app**. A pencil icon appears in the macOS menu bar. The preview is ad-hoc signed, **not notarised by Apple**; macOS may require an explicit allowance in Privacy & Security for a downloaded copy. Building locally is also supported.
 
-Click **Demo** on the shelf, or choose **File → Open demo workspace**. Four editable examples open in a separate demo library. Click **My ideas** to return to your previous board. Demo edits persist; reopening the demo does not create duplicate samples. No account or TeX installation is needed for these four examples.
+Click **Demo** on the shelf, or choose **File → Open demo workspace**. Six editable examples open in a separate demo library. Click **My ideas** to return to your previous board. Demo edits persist; reopening the demo does not create duplicate samples. Existing demo libraries gain the three PDE examples once, retaining earlier boards. No account or TeX installation is needed for these six examples.
 
 To look around without installing anything, [view the public demos](docs/DEMOS.md). Distribution is through GitHub; there is no App Store listing.
 
@@ -49,6 +51,7 @@ To look around without installing anything, [view the public demos](docs/DEMOS.m
 | Fit everything / reset view | Command–1 / Command–0 |
 | Rename / new idea | Return / Command–N |
 | Import screenshot | Drop, paste, or File → Import image |
+| Collect references | Tray icon or File → Capture tray; Add files, Paste or Capture |
 | Capture screenshot | Camera button; macOS permission may be required |
 | Temporarily use the desktop | Hold Command–Shift–Space; release to return |
 | Crop an image | Select it, C, drag the area to keep, then Return; Escape cancels |
@@ -72,6 +75,8 @@ To look around without installing anything, [view the public demos](docs/DEMOS.m
 New libraries default to `~/Library/Application Support/Whiteboard/Ideas`, outside the app bundle. **File → Choose ideas folder…** selects another folder. The app creates `Unfinished`, `Finished` and `Archive` there. **Show ideas folder** in the menu bar opens it in Finder.
 
 Pins and manual order are stored in macOS preferences for each library. In-app rename and status moves retain them; external Finder renames and moving the library to another Mac do not yet carry these preferences.
+
+The capture tray stores its compressed references in `.capture-tray` within the selected library; placed copies live with their board. [Tray controls and limits](docs/CAPTURE-TRAY.md).
 
 Each `.whiteboard` directory holds editable `board.json`, one `previous.json` revision, an `assets` folder and (after editing or checkpointing) a `history` folder. Reopen it through the shelf. Imported screenshots and typeset PDF/PNG assets are copied into the board, so moving their original source files does not break it. The original handwriting is retained. Cropping also retains the original screenshot in the editable file; it is not redaction. Cropped boards require version 0.4 or later. [Crop controls, exports and file compatibility](docs/CROPPING.md).
 

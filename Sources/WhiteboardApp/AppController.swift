@@ -40,6 +40,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
     var desktopHotKey: HotKey?
     var usingDesktop = false
     var cropPanel: PanelView?
+    var trayPanel: PanelView?
+    var trayOpen = false
+    var trayReferences: [CaptureReference] = []
+    var trayButton: NSButton?
     var desktopHint: NSMenuItem?
     var watches: [DirectoryWatch] = []
     var items: [ShelfItem] = []
@@ -101,7 +105,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         appMenu.addItem(withTitle: "Quit Whiteboard", action: #selector(quit), keyEquivalent: "q").target = self
         appItem.submenu = appMenu; main.addItem(appItem)
         let fileMenu = NSMenu(title:"File")
-        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Save checkpoint",#selector(saveCheckpoint),""),("Recovery history…",#selector(showRecoveryHistory),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Open demo workspace",#selector(trySamples),"")] {
+        for (title, action, key) in [("New idea",#selector(newIdea),"n"),("Rename…",#selector(renameIdea),""),("Import image…",#selector(importImageFile),"i"),("Insert LaTeX…",#selector(insertLaTeX),""),("Insert TikZ…",#selector(insertTikZ),""),("Edit selected equation / diagram…",#selector(editSelectedTeX),""),("Save a copy…",#selector(saveCopy),""),("Save selection as idea",#selector(saveSelection),""),("Export PNG…",#selector(exportPNG),"e"),("Export PDF…",#selector(exportPDF),""),("Export workspace preview…",#selector(exportWorkspace),""),("Capture screenshot…",#selector(captureScreenshot),""),("Capture tray",#selector(toggleTray),""),("Save checkpoint",#selector(saveCheckpoint),""),("Recovery history…",#selector(showRecoveryHistory),""),("Recover previous save as a copy",#selector(recoverPrevious),""),("Choose ideas folder…",#selector(chooseFolder),""),("Open demo workspace",#selector(trySamples),"")] {
             fileMenu.addItem(withTitle:title,action:action,keyEquivalent:key).target = self
         }
         fileMenu.addItem(withTitle:"Return to my ideas",action:#selector(returnToIdeas),keyEquivalent:"").target = self
@@ -202,6 +206,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         }
         let capture = button("",#selector(captureScreenshot),symbol:"camera.viewfinder")
         capture.setAccessibilityLabel("Capture screenshot"); capture.toolTip = "Capture screenshot"; stack.addArrangedSubview(capture)
+        let tray = button("",#selector(toggleTray),symbol:"tray")
+        tray.setAccessibilityLabel("Capture tray"); tray.toolTip = "Collect screenshots to place later"; trayButton = tray; stack.addArrangedSubview(tray)
         let colours = ["ink","blue","red","green"]
         for (i,name) in colours.enumerated() {
             let b = button("", #selector(selectColour(_:))); b.contentTintColor = .ink(name); b.tag = i
@@ -244,6 +250,105 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         ])
         updateTool()
     }
+    @objc func toggleTray() {
+        guard !isBusy, library != nil else { return }
+        trayOpen.toggle(); rebuildTray()
+        if trayOpen { performTray {_ in} }
+    }
+    private func rebuildTray() {
+        trayPanel?.removeFromSuperview(); trayPanel = nil
+        trayButton?.state = trayOpen ? .on : .off
+        guard trayOpen, let content = window.contentView else { return }
+        let panel = PanelView(frame:.zero); panel.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(panel); trayPanel = panel
+        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10; stack.translatesAutoresizingMaskIntoConstraints = false; panel.addSubview(stack)
+        let header = NSStackView(); let title = NSTextField(labelWithString:"Capture tray"); title.font = .systemFont(ofSize:14,weight:.semibold)
+        header.addArrangedSubview(title); header.addArrangedSubview(button("Close",#selector(toggleTray))); stack.addArrangedSubview(header)
+        let actions = NSStackView(); actions.spacing = 7
+        actions.addArrangedSubview(button("Add files",#selector(addTrayFiles))); actions.addArrangedSubview(button("Paste",#selector(pasteToTray))); actions.addArrangedSubview(button("Capture",#selector(captureToTray))); stack.addArrangedSubview(actions)
+        let hint = NSTextField(wrappingLabelWithString:trayReferences.isEmpty ? "Collect a few references here. They stay saved until you remove them." : "Click a reference to place a copy. Originals stay in the tray.")
+        hint.font = .systemFont(ofSize:11); hint.textColor = .secondaryLabelColor; stack.addArrangedSubview(hint)
+        hint.widthAnchor.constraint(equalToConstant:270).isActive = true
+        let scroll = NSScrollView(); scroll.drawsBackground = false; scroll.hasVerticalScroller = true; stack.addArrangedSubview(scroll)
+        let rows = NSStackView(); rows.orientation = .vertical; rows.alignment = .leading; rows.spacing = 6
+        for reference in trayReferences {
+            let row = NSStackView(); row.spacing = 4
+            let place = button(reference.title,#selector(placeTrayReference(_:)),symbol:"plus.circle")
+            place.identifier = NSUserInterfaceItemIdentifier(reference.id.uuidString); place.toolTip = "Place "+reference.title+" on this board"
+            place.widthAnchor.constraint(equalToConstant:230).isActive = true; place.cell?.lineBreakMode = .byTruncatingMiddle
+            let remove = button("",#selector(removeTrayReference(_:)),symbol:"xmark")
+            remove.setAccessibilityLabel("Remove "+reference.title+" from tray"); remove.toolTip = "Remove from tray; placed copies stay on boards"
+            remove.identifier = place.identifier; row.addArrangedSubview(place); row.addArrangedSubview(remove); rows.addArrangedSubview(row)
+        }
+        scroll.documentView = rows; rows.layoutSubtreeIfNeeded(); rows.setFrameSize(NSSize(width:270,height:max(1,rows.fittingSize.height)))
+        scroll.widthAnchor.constraint(equalToConstant:280).isActive = true
+        let height = scroll.heightAnchor.constraint(equalToConstant:min(255,max(1,rows.fittingSize.height))); height.priority = .defaultHigh; height.isActive = true
+        NSLayoutConstraint.activate([panel.topAnchor.constraint(equalTo:content.topAnchor,constant:170),panel.trailingAnchor.constraint(equalTo:content.trailingAnchor,constant:-20),panel.bottomAnchor.constraint(lessThanOrEqualTo:content.bottomAnchor,constant:-90),stack.leadingAnchor.constraint(equalTo:panel.leadingAnchor,constant:12),stack.trailingAnchor.constraint(equalTo:panel.trailingAnchor,constant:-12),stack.topAnchor.constraint(equalTo:panel.topAnchor,constant:12),stack.bottomAnchor.constraint(equalTo:panel.bottomAnchor,constant:-12)])
+    }
+    private func performTray(_ action: @escaping (CaptureTray) throws -> Void) {
+        guard !isBusy, let library else { return }
+        let tray = CaptureTray(libraryRoot:library.root)
+        isBusy = true; pendingImports += 1
+        io.async {
+            var failure: Error?
+            do { try action(tray) } catch { failure = error }
+            let references = Result { try tray.references() }
+            let actionError = failure
+            DispatchQueue.main.async {
+                var failure = actionError
+                self.pendingImports -= 1; self.isBusy = false
+                switch references { case .success(let items): self.trayReferences = items
+                case .failure(let error): failure = failure ?? error }
+                self.rebuildTray()
+                if let failure { self.showError(failure) }
+                if self.afterSave != nil { self.saveNow() }
+            }
+        }
+    }
+    @objc func addTrayFiles() {
+        guard !isBusy else { return }
+        let picker = NSOpenPanel(); picker.allowedContentTypes = [.png,.jpeg,.tiff,.heic,.gif]; picker.allowsMultipleSelection = true
+        picker.message = "Collect images in the tray, then place them on any idea."
+        guard picker.runModal() == .OK else { return }; let urls = picker.urls
+        guard urls.count <= CaptureTray.itemLimit else { showError(CaptureTrayError.full); return }
+        performTray { tray in
+            for url in urls {
+                try autoreleasepool {
+                    guard let size = try url.resourceValues(forKeys:[.fileSizeKey]).fileSize, size <= CaptureTray.imageByteLimit else { throw CaptureTrayError.tooLarge }
+                    try tray.add(Data(contentsOf:url),extension:url.pathExtension,title:url.deletingPathExtension().lastPathComponent)
+                }
+            }
+        }
+    }
+    @objc func pasteToTray() {
+        guard !isBusy else { return }
+        let pasteboard = NSPasteboard.general
+        if let data = pasteboard.data(forType:.png) { performTray {try $0.add(data,extension:"png",title:"Pasted image")} }
+        else if let data = pasteboard.data(forType:.tiff) { performTray {try $0.add(data,extension:"tiff",title:"Pasted image")} }
+        else { showError(CaptureTrayError.invalidImage) }
+    }
+    @objc func removeTrayReference(_ sender: NSButton) {
+        guard let value = sender.identifier?.rawValue, let id = UUID(uuidString:value) else { return }
+        performTray {try $0.remove(id)}
+    }
+    @objc func placeTrayReference(_ sender: NSButton) {
+        guard !isBusy, let library, let value = sender.identifier?.rawValue, let id = UUID(uuidString:value), activeURL != nil else { return }
+        let boardID = canvas.board.id, root = library.root
+        let point = canvas.board.viewport.world(Point(canvas.bounds.midX-250,canvas.bounds.midY-120))
+        isBusy = true; pendingImports += 1
+        io.async {
+            let result = Result {try CaptureTray(libraryRoot:root).data(for:id)}
+            DispatchQueue.main.async {
+                self.pendingImports -= 1; self.isBusy = false
+                switch result {
+                case .success(let (reference,data)):
+                    if self.canvas.board.id == boardID { self.importImage(data,ext:reference.fileExtension,at:point) }
+                case .failure(let error): self.showError(error)
+                }
+                if self.afterSave != nil { self.saveNow() }
+            }
+        }
+    }
+    @objc func captureToTray() { performScreenCapture(intoTray:true) }
     private func configureCanvas() {
         canvas.onCropChange = { [weak self] cropping in self?.cropPanel?.isHidden = !cropping }
         canvas.onRecognition = { [weak self] name in
@@ -286,9 +391,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
                     else { _ = try library.create() }
                     items = try library.list()
                 }
+                if root.standardizedFileURL == self.demoRoot.standardizedFileURL {
+                    try PDEExamples.installMissing(library); items = try library.list()
+                }
                 DispatchQueue.main.async {
                     guard generation == self.libraryGeneration else { return }
                     self.library = library; self.items = items
+                    self.trayReferences = []; self.trayOpen = false; self.rebuildTray()
                     self.shelfOrder = UserDefaults.standard.data(forKey:"shelfOrder:"+library.root.path).flatMap {try? JSONDecoder().decode(ShelfOrder.self,from:$0)} ?? ShelfOrder()
                     self.watches = IdeaStatus.allCases.compactMap { DirectoryWatch(url: library.folder($0)) { [weak self] in self?.scheduleRefresh() } }
                     self.isBusy = false; self.shelfPage = 0; self.buildShelf()
@@ -877,7 +986,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
         guard isDemo else { return }
         afterSaving { self.openLibrary(self.root) }
     }
-    @objc func captureScreenshot() {
+    @objc func captureScreenshot() { performScreenCapture(intoTray:false) }
+    private func performScreenCapture(intoTray: Bool) {
         guard !isBusy, activeURL != nil else { return }
         let documentID = canvas.board.id
         let point = canvas.board.viewport.world(Point(canvas.bounds.midX-250,canvas.bounds.midY-150))
@@ -889,7 +999,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSSearchFieldDelegat
             let data = try? Data(contentsOf:url); try? FileManager.default.removeItem(at:url)
             DispatchQueue.main.async {
                 self.isBusy = false; self.showBoard()
-                if let data, self.canvas.board.id == documentID { self.importImage(data,ext:"png",at:point) }
+                if let data, self.canvas.board.id == documentID {
+                    if intoTray { self.performTray {try $0.add(data,extension:"png",title:"Screenshot")} }
+                    else { self.importImage(data,ext:"png",at:point) }
+                }
             }
         }
         do { try process.run() } catch { isBusy = false; showBoard(); showError(error) }

@@ -1,0 +1,25 @@
+\begin{tikzpicture}[>=Stealth,font=\sffamily\small]
+\definecolor{field}{RGB}{26,114,146}
+\foreach \i in {0,...,23} {\foreach \j in {0,...,23} {
+  \pgfmathsetmacro{\shade}{100*sin(180*(\i+0.5)/24)*sin(180*(\j+0.5)/24)}
+  \fill[field!\shade!white] ({\i/6},{\j/6}) rectangle ({(\i+1)/6},{(\j+1)/6});
+}}
+\draw[black!70,thick] (0,0) rectangle (4,4);
+\draw[->] (0,0)--(4.5,0) node[right] {$x$};
+\draw[->] (0,0)--(0,4.5) node[above] {$y$};
+\node[below left] at (0,0) {$0$}; \node[below] at (4,0) {$1$}; \node[left] at (0,4) {$1$};
+\node[above] at (2,4) {$u=0\text{ on }\partial\Omega$};
+\fill[white] (2,2) circle (2pt);
+\node[white,above=4pt] at (2,2) {$u(1/2,1/2)=1$};
+\foreach \j in {0,...,49} {\pgfmathsetmacro{\shade}{2*\j+1}
+  \fill[field!\shade!white] (4.8,{\j*0.08}) rectangle (5.1,{(\j+1)*0.08});}
+\draw[black!30] (4.8,0) rectangle (5.1,4);
+\node[right] at (5.1,0) {$0$}; \node[right] at (5.1,4) {$1$}; \node[above] at (4.95,4.35) {$u$};
+\begin{scope}[shift={(7,2)}]
+  \draw[black!45] (-1,0)--(1,0) (0,-1)--(0,1);
+  \foreach \x/\y/\v in {0/0/4,-1/0/-1,1/0/-1,0/1/-1,0/-1/-1}
+    \node[circle,draw=field,fill=white,minimum size=20pt] at (\x,\y) {$\v$};
+  \node[align=center] at (0,-2) {Five-point stencil\\weights divided by $h^2$};
+\end{scope}
+\node[anchor=west] at (0,-0.8) {Exact solution sampled at $24\times24$ cell centres; no numerical solve.};
+\end{tikzpicture}

@@ -51,7 +51,7 @@ The approved 84-item framework is retained below. **Built** means the first nati
 | 45 | Temporary pointer ink | Next |
 | 46 | Built-in capture | Built: user-initiated macOS capture action; permission flow and end-to-end capture still need validation |
 | 47 | Paste image/text/link | Partial: images and plain text; URL-specific clickable objects next |
-| 48 | Capture tray | Next |
+| 48 | Capture tray | Built: persistent per-library image tray; add files, paste, capture and click to place. Up to eight references within 64 MiB of compressed data; direct tray dragging and thumbnails remain next |
 | 49 | Repeat capture area | Next |
 | 50 | Crop/resize images | Built: reversible bitmap cropping, restore full image and proportional resizing; LaTeX/TikZ vector objects are excluded from cropping |
 | 51 | Attach ink to screenshot | Partial: ink starting on an image follows movement and proportional resizing; explicit attachment next |
@@ -108,4 +108,6 @@ Do not enable all future features as background workers. Each addition must spec
 - [x] Render only on explicit request; no idle typesetting process.
 - [ ] Handwriting-to-LaTeX recognition remains separate future work.
 
-See [LaTeX and TikZ](MATHS.md) for supported input and local TeX requirements.
+- [x] Detailed heat, wave and Poisson examples with pre-rendered vectors and editable source, available without TeX.
+
+See [worked PDE models](PDE-MODELS.md) and [LaTeX and TikZ](MATHS.md) for supported input and local TeX requirements.
