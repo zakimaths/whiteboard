@@ -1,0 +1,46 @@
+{
+  "label": "Visible: 2000 strokes, 120000 points, 8 images",
+  "pid": 89151,
+  "metric": "Process resident set size (KiB) and cumulative user+system CPU time from ps; not total system memory or battery energy",
+  "duration_seconds": 30.089,
+  "rss_mib_min": 37.734375,
+  "rss_mib_max": 63.8125,
+  "average_cpu_percent_one_core": 0.1994,
+  "samples": [
+    {
+      "elapsed_seconds": 0.006,
+      "rss_kib": 65344,
+      "cpu_seconds": 0.75
+    },
+    {
+      "elapsed_seconds": 5.021,
+      "rss_kib": 64992,
+      "cpu_seconds": 0.75
+    },
+    {
+      "elapsed_seconds": 10.038,
+      "rss_kib": 64992,
+      "cpu_seconds": 0.77
+    },
+    {
+      "elapsed_seconds": 15.054,
+      "rss_kib": 64992,
+      "cpu_seconds": 0.78
+    },
+    {
+      "elapsed_seconds": 20.07,
+      "rss_kib": 64592,
+      "cpu_seconds": 0.79
+    },
+    {
+      "elapsed_seconds": 25.078,
+      "rss_kib": 39968,
+      "cpu_seconds": 0.8
+    },
+    {
+      "elapsed_seconds": 30.095,
+      "rss_kib": 38640,
+      "cpu_seconds": 0.81
+    }
+  ]
+}

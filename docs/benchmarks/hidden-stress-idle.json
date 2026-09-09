@@ -1,0 +1,46 @@
+{
+  "label": "Hidden after stress board",
+  "pid": 89151,
+  "metric": "Process resident set size (KiB) and cumulative user+system CPU time from ps; not total system memory or battery energy",
+  "duration_seconds": 30.078,
+  "rss_mib_min": 54.296875,
+  "rss_mib_max": 54.296875,
+  "average_cpu_percent_one_core": 0.2327,
+  "samples": [
+    {
+      "elapsed_seconds": 0.003,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.22
+    },
+    {
+      "elapsed_seconds": 5.017,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.24
+    },
+    {
+      "elapsed_seconds": 10.032,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.25
+    },
+    {
+      "elapsed_seconds": 15.044,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.26
+    },
+    {
+      "elapsed_seconds": 20.057,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.27
+    },
+    {
+      "elapsed_seconds": 25.068,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.28
+    },
+    {
+      "elapsed_seconds": 30.081,
+      "rss_kib": 55600,
+      "cpu_seconds": 1.29
+    }
+  ]
+}
